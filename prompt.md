@@ -1,3 +1,20 @@
-Check file run_msl.py, run_smap.py và các file liên quan. Mọi thứ đã chạy ổn hết chưa để tui có thể chạy trên kaggle T4 được
+!pip install -r requirements.txt
+Collecting arch==5.3.1 (from -r requirements.txt (line 1))
+  Downloading arch-5.3.1.tar.gz (3.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.1/3.1 MB 27.3 MB/s eta 0:00:00
+  Installing build dependencies ... done
+  error: subprocess-exited-with-error
+  
+  × Getting requirements to build wheel did not run successfully.
+  │ exit code: 1
+  ╰─> See above for output.
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  Getting requirements to build wheel ... error
+error: subprocess-exited-with-error
 
-Phản hồi lại bằng tin nhắn cho tui, có đúng đang là chạy resnet 2 stage không? Mọi thứ vẫn ổn đúng ko?
+× Getting requirements to build wheel did not run successfully.
+│ exit code: 1
+╰─> See above for output.
+
+note: This error originates from a subprocess, and is likely not a problem with pip.
