@@ -33,7 +33,7 @@ class WADI(Dataset):
         self.data = []
         self.targets = []
         labels = []
-        wsz, stride = 400, 10
+        wsz, stride = 400, 200
 
         if self.train:
             fname += '_14days_new.csv'

@@ -2,10 +2,13 @@
 import os
 import pandas
 import numpy as np
+import torch
 from torch.utils.data import Dataset
 from utils.mypath import MyPath
 import ast
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class Yahoo(Dataset):

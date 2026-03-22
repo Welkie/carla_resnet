@@ -3,10 +3,13 @@ import os
 import pandas
 import numpy as np
 import pandas as pd
+import torch
 from torch.utils.data import Dataset
 from utils.mypath import MyPath
 import ast
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class SWAT(Dataset):
@@ -33,7 +36,7 @@ class SWAT(Dataset):
         self.data = []
         self.targets = []
         labels = []
-        wsz, stride = 200, 10
+        wsz, stride = 200, 50
 
         if self.train:
             fname += '_train.csv'
