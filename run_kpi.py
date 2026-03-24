@@ -320,7 +320,7 @@ def evaluate_experiments(file_list, prev_metrics_file=None, output_metrics_file=
             thr = t[idx]
 
             pred = scores >= thr
-            tn, fp, fn, tp = confusion_matrix(df_test["Class"], pred).ravel()
+            tn, fp, fn, tp = confusion_matrix(df_test["Class"], pred, labels=[0, 1]).ravel()
 
             new_row = pd.DataFrame([{
                 "name": fname, 
