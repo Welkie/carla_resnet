@@ -2,9 +2,12 @@
 import os
 import pandas as pd
 import numpy as np
+import torch
 from torch.utils.data import Dataset
 from utils.mypath import MyPath
 from sklearn.preprocessing import StandardScaler, RobustScaler
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class KPI(Dataset):
@@ -88,9 +91,9 @@ class KPI(Dataset):
             target = 0
             class_name = ''
 
-        ts_size = len(ts)
+        ts_size = len(ts_org)
 
-        out = {'ts_org': ts, 'target': target, 'meta': {'ts_size': ts_size, 'index': index, 'class_name': class_name}}
+        out = {'ts_org': ts_org, 'target': target, 'meta': {'ts_size': ts_size, 'index': index, 'class_name': class_name}}
 
         return out
 
