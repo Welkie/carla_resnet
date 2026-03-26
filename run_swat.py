@@ -266,7 +266,7 @@ def main():
     datasets = ["swat"]
 
     # Define the Kaggle input path provided by the user
-    kaggle_input_path = "/kaggle/input/datasets/vishala28/swat-dataset-secure-water-treatment-system"
+    kaggle_input_path = "/kaggle/input/swat-dataset-secure-water-treatment-system"
 
     writable_dataset_path = os.path.join(BASE_DIR, "datasets", "swat")
 
