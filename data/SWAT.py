@@ -1,4 +1,3 @@
-
 import os
 import pandas
 import numpy as np
@@ -8,9 +7,6 @@ from torch.utils.data import Dataset
 from utils.mypath import MyPath
 import ast
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 class SWAT(Dataset):
     """`SMD <https://www>`_ Dataset.
@@ -27,6 +23,9 @@ class SWAT(Dataset):
     def __init__(self, fname, root=MyPath.db_root_dir('swat'), train=True, transform=None, sanomaly= None, mean_data=None, std_data=None):
 
         super(SWAT, self).__init__()
+        if 'swat_DATASET_PATH' in os.environ:
+            root = os.environ['swat_DATASET_PATH']
+
         self.root = root
         self.transform = transform
         self.sanomaly = sanomaly
@@ -36,38 +35,77 @@ class SWAT(Dataset):
         self.data = []
         self.targets = []
         labels = []
-        wsz, stride = 200, 50
+        wsz, stride = 256, 50
 
         if self.train:
-            fname += '_train.csv'
+            file_path = os.path.join(self.root, "normal.csv")
         else:
-            fname += '_test.csv'
+            file_path = os.path.join(self.root, "attack.csv")
 
-        file_path = os.path.join(self.root, fname)
         temp = pd.read_csv(file_path)
-        labels = np.asarray(temp['attack'])
-        temp = np.asarray(temp.iloc[:, 1:52])
+        
+        # Clean up column names (strip whitespace)
+        temp.columns = temp.columns.str.strip()
+        
+        # Detect label column
+        label_col = 'attack'
+        possible_labels = ['attack', 'Attack', 'Normal/Attack', 'label', 'class']
+        for col in possible_labels:
+            if col in temp.columns:
+                label_col = col
+                break
+        
+        if label_col not in temp.columns:
+            print(f"Warning: Label column not found. Available columns: {temp.columns.tolist()}")
+            # Fallback: assume the last column is the label if not found
+            label_col = temp.columns[-1]
+            print(f"Using last column '{label_col}' as label.")
+
+        # Map labels to 0 (Normal) and 1 (Attack)
+        # Assuming 'Normal' is 0 or 'Normal', 'Attack' is 1 or 'Attack'
+        temp[label_col] = temp[label_col].apply(lambda x: 1 if str(x).lower() in ['attack', '1', 'anomaly'] else 0)
+        labels = np.asarray(temp[label_col])
+        
+        # Robust Feature Extraction
+        # Drop Timestamp and Label columns to ensure only sensors remain
+        # User defined format: Timestamp, Sensor1, ..., Sensor51, Label
+        drop_cols = ['Timestamp', 'timestamp', 'Date', 'Time', label_col]
+        
+        # Also drop 'Normal/Attack' if it exists and wasn't picked as label_col
+        if 'Normal/Attack' in temp.columns and 'Normal/Attack' != label_col:
+            drop_cols.append('Normal/Attack')
+
+        temp = temp.drop(columns=drop_cols, errors='ignore')
+
+        # print(f"Features columns: {temp.columns.tolist()}")
+
+        temp = np.asarray(temp).astype(np.float32)
 
         if np.any(sum(np.isnan(temp))!=0):
             print('Data contains NaN which replaced with zero')
             temp = np.nan_to_num(temp)
 
         self.mean, self.std = mean_data, std_data
-        # if self.train:
-        #     self.mean = np.mean(temp, axis=0)
-        #     self.std = np.std(temp , axis=0)
-        # else:
-        #     self.std[self.std == 0.0] = 1.0
-        #     temp = (temp - self.mean) / self.std
 
         if self.train:
             min_column = np.amin(temp, axis=0)
             max_column = np.amax(temp, axis=0)
             self.mean, self.std = min_column, max_column 
+            range_val = (max_column - min_column) + 1e-20
+            temp = (temp - min_column) / range_val 
         else:
-            self.mean, self.std = mean_data, std_data
-            range_val = (std_data - mean_data) + 1e-20
-            temp = (temp - mean_data) / range_val
+            # For test set, use the statistics from training set
+            # If mean_data and std_data are provided (which they should be for test)
+            if mean_data is None or std_data is None:
+                 print("Warning: Test set loaded without mean_data/std_data. Using self-statistics (may cause leakage/shift).")
+                 min_column = np.amin(temp, axis=0)
+                 max_column = np.amax(temp, axis=0)
+                 self.mean, self.std = min_column, max_column
+            else:
+                 self.mean, self.std = mean_data, std_data
+            
+            range_val = (self.std - self.mean) + 1e-20
+            temp = (temp - self.mean) / range_val
 
         self.targets = labels
         self.data = np.asarray(temp)
@@ -94,9 +132,9 @@ class SWAT(Dataset):
         Returns:
             dict: {'ts': ts, 'target': index of target class, 'meta': dict}
         """
-        ts_org = torch.from_numpy(self.data[index]).float().to(device)  # cuda
+        ts_org = torch.from_numpy(self.data[index]).float() # cuda
         if len(self.targets) > 0:
-            target = torch.tensor(self.targets[index].astype(int), dtype=torch.long).to(device)
+            target = torch.tensor(self.targets[index].astype(int), dtype=torch.long)
             class_name = self.classes[target]
         else:
             target = 0

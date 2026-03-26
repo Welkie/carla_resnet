@@ -120,9 +120,13 @@ class TSRepository(object):
         
         assert(b + self.ptr <= self.n)
         
-        self.features[self.ptr:self.ptr+b].copy_(features.detach())
-        if not torch.is_tensor(targets): targets = torch.from_numpy(targets)
-        self.targets[self.ptr:self.ptr+b].copy_(targets.detach())
+        # Move to device of repository (likely CPU)
+        self.features[self.ptr:self.ptr+b].copy_(features.detach().to(self.device))
+        
+        if not torch.is_tensor(targets): 
+            targets = torch.from_numpy(targets)
+        
+        self.targets[self.ptr:self.ptr+b].copy_(targets.detach().to(self.device))
         self.ptr += b
 
     def to(self, device):

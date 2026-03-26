@@ -9,4 +9,4 @@ class MyPath(object):
         # ---- Local path fix ----
         BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         datasets_path = os.path.join(BASE_DIR, 'datasets')
-        return os.path.join(datasets_path, database)
+        return os.path.join(datasets_path, database.upper())

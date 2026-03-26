@@ -27,17 +27,17 @@ class SMD(Dataset):
         self.data = []
         self.targets = []
         labels = []
-        wsz, stride = 200, 5
+        wsz, stride = 512, 5
 
         if self.train:
-            self.base_folder = 'train'
+            self.base_folder += 'train'
         else:
-            self.base_folder = 'test'
-            labels = pd.read_csv(os.path.join(self.root, 'test_label', fname), header=None)
+            self.base_folder += 'test'
+            labels = pd.read_csv(os.path.join(self.root, 'test_label', fname))
             labels = np.asarray(labels)
 
         file_path = os.path.join(self.root, self.base_folder, fname)
-        temp = pd.read_csv(file_path, header=None)
+        temp = pd.read_csv(file_path)
         temp = np.asarray(temp)
 
         if np.any(sum(np.isnan(temp))!=0):

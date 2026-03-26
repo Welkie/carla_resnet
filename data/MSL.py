@@ -24,7 +24,7 @@ class MSL(Dataset):
         self.classes = ['Normal', 'Anomaly']
         self.data = []
         self.targets = []
-        wsz, stride = 200, 1
+        wsz, stride = 256, 1
 
         with open(os.path.join(self.root, 'labeled_anomalies.csv'), 'r') as file:
             csv_reader = pandas.read_csv(file, delimiter=',')

@@ -19,7 +19,7 @@ def create_config(config_file_env, config_file_exp, fname):
         cfg[k] = v
 
     # Set paths for pretext task (These directories are needed in every stage)
-    base_dir = os.path.join(root_dir, cfg['train_db_name'].lower())
+    base_dir = os.path.join(root_dir, cfg['train_db_name'])
     pretext_dir = os.path.join(base_dir, fname+'/pretext')
     mkdir_if_missing(base_dir)
     mkdir_if_missing(pretext_dir)
@@ -39,7 +39,7 @@ def create_config(config_file_env, config_file_exp, fname):
 
 
     if cfg['setup'] in ['classification']:
-        base_dir = os.path.join(root_dir, cfg['train_db_name'].lower())
+        base_dir = os.path.join(root_dir, cfg['train_db_name'])
         classification_dir = os.path.join(base_dir, fname+ '/classification')
         mkdir_if_missing(base_dir)
         mkdir_if_missing(classification_dir)

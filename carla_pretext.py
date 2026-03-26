@@ -97,7 +97,7 @@ def main():
             #                                  split='train') # Dataset w/o augs for knn eval
 
     elif p['train_db_name'] == 'yahoo':
-        filename = os.path.join(MyPath.db_root_dir('yahoo'), p['fname'])
+        filename = os.path.join('/home/zahraz/hz18_scratch/zahraz/datasets/', 'Yahoo/', p['fname'])
         dataset = []
 
         print(filename)
@@ -156,11 +156,11 @@ def main():
     ts_repository_base = TSRepository(len(train_dataset),
                                       p['model_kwargs']['features_dim'],
                                       p['num_classes'], p['criterion_kwargs']['temperature'])
-    ts_repository_base.to(device)
+    # ts_repository_base.to(device) # Keep on CPU
     ts_repository_val = TSRepository(len(val_dataset),
                                      p['model_kwargs']['features_dim'],
                                      p['num_classes'], p['criterion_kwargs']['temperature'])
-    ts_repository_val.to(device)
+    # ts_repository_val.to(device) # Keep on CPU
 
     criterion = get_criterion(p)
     criterion = criterion.to(device)

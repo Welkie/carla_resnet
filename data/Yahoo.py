@@ -2,13 +2,10 @@
 import os
 import pandas
 import numpy as np
-import torch
 from torch.utils.data import Dataset
 from utils.mypath import MyPath
 import ast
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class Yahoo(Dataset):
@@ -42,7 +39,7 @@ class Yahoo(Dataset):
 
         self.data = np.asarray(data)
         self.targets = np.asarray(label)
-        wsz, stride = 250, 1
+        wsz, stride = 512, 1
 
         self.data, self.targets = self.convert_to_windows(wsz, stride)
 

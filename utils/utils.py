@@ -63,8 +63,9 @@ def fill_ts_repository(p, loader, model, ts_repository, real_aug=False, ts_repos
     if real_aug:
         ts_repository.resize(3)
 
-    con_data = torch.tensor([]).to(device)
-    con_target = torch.tensor([]).to(device)
+    con_data_list = [] # List for efficient accumulation
+    con_target_list = []
+    
     for i, batch in enumerate(loader): 
         ts_org = batch['ts_org'].to(device, non_blocking=True) #cuda
         targets = batch['target'].to(device, non_blocking=True)
@@ -82,10 +83,8 @@ def fill_ts_repository(p, loader, model, ts_repository, real_aug=False, ts_repos
             print('Fill TS Repository [%d/%d]' %(i, len(loader)))
 
         if real_aug:
-            con_data = torch.cat((con_data, ts_org), dim=0)
-            # con_target = torch.cat((con_target, torch.from_numpy(targets).float()), dim=0)
-            con_target = torch.cat((con_target, targets), dim=0) #cuda
-
+            con_data_list.append(ts_org.detach().cpu())
+            con_target_list.append(targets.detach().cpu())
 
             ts_w_augment = batch['ts_w_augment'].to(device, non_blocking=True) #cuda
             targets = torch.LongTensor([2]*ts_w_augment.shape[0]).to(device, non_blocking=True)
@@ -98,16 +97,21 @@ def fill_ts_repository(p, loader, model, ts_repository, real_aug=False, ts_repos
             ts_ss_augment = batch['ts_ss_augment'].to(device, non_blocking=True) #cuda
             targets = torch.LongTensor([4]*ts_ss_augment.shape[0]).to(device, non_blocking=True)
             # ts_ss_augment = torch.from_numpy(ts_ss_augment).float() #cuda
-            con_data = torch.cat((con_data, ts_ss_augment), dim=0)
-            con_target = torch.cat((con_target, targets), dim=0)
+            con_data_list.append(ts_ss_augment.detach().cpu())
+            con_target_list.append(targets.detach().cpu())
+            
             output = model(ts_ss_augment.reshape(b, h, w))
             ts_repository.update(output, targets)
             ts_repository_aug.update(output, targets)
 
 
     if real_aug:
-        con_dataset = SaveAugmentedDataset(con_data, con_target)
-        con_loader = torch.utils.data.DataLoader(con_dataset, num_workers=p['num_workers'],
-                                                 batch_size=p['batch_size'], pin_memory=True,
-                                                 drop_last=False, shuffle=False)
-        torch.save(con_loader, p['contrastive_dataset'])
+        con_data = torch.cat(con_data_list, dim=0)
+        con_target = torch.cat(con_target_list, dim=0)
+        
+        # Save tensors directly instead of the loader
+        save_dict = {
+            'data': con_data,
+            'targets': con_target
+        }
+        torch.save(save_dict, p['contrastive_dataset'])

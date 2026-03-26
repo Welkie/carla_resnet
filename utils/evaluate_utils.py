@@ -23,12 +23,7 @@ def contrastive_evaluate(val_loader, model, ts_repository):
         #ts_org=torch.unsqueeze(ts_org, dim=1)
         b, w, h = ts_org.shape
         target = torch.from_numpy(target)
-        ts_tensor = ts_org.view(b, h, w)
-        if hasattr(model, 'module') and b < torch.cuda.device_count():
-            device = next(model.module.parameters()).device
-            output = model.module(ts_tensor.to(device))
-        else:
-            output = model(ts_tensor)
+        output = model(ts_org.view(b, h, w))
 
         output = ts_repository.weighted_knn(output)
 
@@ -76,12 +71,7 @@ def get_predictions(p, dataloader, model, return_features=False, is_training=Fal
         else:
             targets.append(batch['target'])
 
-        ts_tensor = ts.view(bs, h, w)
-        if hasattr(model, 'module') and bs < torch.cuda.device_count():
-            device = next(model.module.parameters()).device
-            res = model.module(ts_tensor.to(device), forward_pass='return_all')
-        else:
-            res = model(ts_tensor, forward_pass='return_all')
+        res = model(ts.view(bs, h, w), forward_pass='return_all')
         output = res['output']
         if return_features:
             features[ptr: ptr+bs] = res['features']
