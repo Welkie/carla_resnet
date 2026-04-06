@@ -377,16 +377,10 @@ def process_merged_dataset(merged_path, output_dir):
         # Strip whitespace from columns
         df.columns = df.columns.str.strip()
         
-        # Determine split point
-        # Option 1: Hardcoded standard SWAT split
-        split_index = 496800
-        
-        if len(df) < split_index:
-             print(f"Warning: Dataset length ({len(df)}) is smaller than standard split ({split_index}). Using 50% split.")
-             split_index = len(df) // 2
-        
-        train_df = df.iloc[:split_index].copy()
-        test_df = df.iloc[split_index:].copy()
+        # Split dung: train = 496800 đầu, test = 449919 cuối
+        # Bo qua phan o giua (449919 rows normal thừa)
+        train_df = df.iloc[:496800].copy()
+        test_df  = df.iloc[-449919:].copy()
         
         # Save to destination
         train_path = os.path.join(output_dir, "normal.csv")
@@ -396,8 +390,8 @@ def process_merged_dataset(merged_path, output_dir):
         test_df.to_csv(test_path, index=False)
         
         print(f"Split merged.csv into:")
-        print(f"  Train (normal.csv): {len(train_df)} rows")
-        print(f"  Test (attack.csv): {len(test_df)} rows")
+        print(f"Train (normal.csv): {len(train_df)} rows")
+        print(f"Test (attack.csv): {len(test_df)} rows")
         
     except Exception as e:
         print(f"Error processing merged dataset: {e}")

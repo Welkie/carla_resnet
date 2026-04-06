@@ -1,78 +1,19 @@
-!python run_swat.py
-Kaggle input path not found. using local path if available.
-Warning: normal.csv or attack.csv not found in /kaggle/working/carla_resnet/datasets/swat
-Please ensure 'datasets/swat/normal.csv' and 'datasets/swat/attack.csv' exist.
-Set swat_DATASET_PATH to /kaggle/working/carla_resnet/datasets/swat
+sửa run_swat.py theo code và hướng dẫn gợi ý dưới đây:
 
-==============================
-STARTING EXPERIMENTS
-==============================
-GPU available: Tesla T4
+def process_merged_dataset(merged_path, output_dir):
+    df = pd.read_csv(merged_path)
+    df.columns = df.columns.str.strip()
 
-Running dataset: swat
-Error running pretext for swat: Command '['/usr/bin/python3', 'carla_pretext.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/pretext/carla_pretext_swat.yml', '--fname', 'swat']' returned non-zero exit status 1.
-Traceback (most recent call last):
-  File "/kaggle/working/carla_resnet/carla_pretext.py", line 240, in <module>
-    main()
-  File "/kaggle/working/carla_resnet/carla_pretext.py", line 143, in main
-    train_dataset = get_train_dataset(p, train_transforms, sanomaly, to_augmented_dataset=True)
-                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/kaggle/working/carla_resnet/utils/common_config.py", line 118, in get_train_dataset
-    dataset = SWAT(p['fname'], train=True, transform=transform, sanomaly=sanomaly,
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/kaggle/working/carla_resnet/data/SWAT.py", line 45, in __init__
-    temp = pd.read_csv(file_path)
-           ^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/dist-packages/pandas/io/parsers/readers.py", line 1026, in read_csv
-    return _read(filepath_or_buffer, kwds)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/dist-packages/pandas/io/parsers/readers.py", line 620, in _read
-    parser = TextFileReader(filepath_or_buffer, **kwds)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/dist-packages/pandas/io/parsers/readers.py", line 1620, in __init__
-    self._engine = self._make_engine(f, self.engine)
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/dist-packages/pandas/io/parsers/readers.py", line 1880, in _make_engine
-    self.handles = get_handle(
-                   ^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/dist-packages/pandas/io/common.py", line 873, in get_handle
-    handle = open(
-             ^^^^^
-FileNotFoundError: [Errno 2] No such file or directory: '/kaggle/working/carla_resnet/datasets/swat/normal.csv'
+    # Split dung: train = 496800 đầu, test = 449919 cuối
+    # Bo qua phan o giua (449919 rows normal thừa)
+    train_df = df.iloc[:496800]
+    test_df  = df.iloc[-449919:]   # <-- sua o day
 
-Error running classification for swat: Command '['/usr/bin/python3', 'carla_classification.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/classification/carla_classification_swat.yml', '--fname', 'swat']' returned non-zero exit status 1.
-Traceback (most recent call last):
-  File "/kaggle/working/carla_resnet/carla_classification.py", line 213, in <module>
-    main()
-  File "/kaggle/working/carla_resnet/carla_classification.py", line 51, in main
-    train_dataset = get_aug_train_dataset(p, train_transformations, to_neighbors_dataset = True)
-                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/kaggle/working/carla_resnet/utils/common_config.py", line 172, in get_aug_train_dataset
-    data_dict = torch.load(p['contrastive_dataset'], weights_only=False)
-                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/dist-packages/torch/serialization.py", line 1500, in load
-    with _open_file_like(f, "rb") as opened_file:
-         ^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/dist-packages/torch/serialization.py", line 768, in _open_file_like
-    return _open_file(name_or_buffer, mode)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/dist-packages/torch/serialization.py", line 749, in __init__
-    super().__init__(open(name, mode))  # noqa: SIM115
-                     ^^^^^^^^^^^^^^^^
-FileNotFoundError: [Errno 2] No such file or directory: 'results/swat/swat/pretext/con_train_dataset.pth'
+    train_path = os.path.join(output_dir, "normal.csv")
+    test_path  = os.path.join(output_dir, "attack.csv")
 
-Max GPU Memory after swat: 0.00 MB
+    train_df.to_csv(train_path, index=False)
+    test_df.to_csv(test_path, index=False)
 
-==============================
-DONE ALL SWAT DATASETS
-Total time: 18.88 s
-Avg / dataset: 18.88 s
-==============================
-
-Time results saved to results/swat/time_results.json
-
-==============================
-STARTING EVALUATION (PAPER STYLE)
-==============================
-Skip swat (missing files)
-No results!
+    print(f"Train (normal.csv): {len(train_df):,} rows")
+    print(f"Test  (attack.csv): {len(test_df):,} rows")
