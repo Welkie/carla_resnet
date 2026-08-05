@@ -4,6 +4,7 @@ import time
 import json
 import subprocess
 import shutil
+import random
 import torch
 import numpy as np
 import pandas as pd
@@ -11,6 +12,17 @@ from sklearn.metrics import average_precision_score, confusion_matrix, precision
 import argparse
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ["PYTHONHASHSEED"] = str(seed)
 
 # =========================================================
 # PAPER-STYLE SUMMARY
@@ -164,9 +176,10 @@ def prepare_kpi_data(hdf_path, writable_dataset_path):
 # =========================================================
 # RUN EXPERIMENTS
 # =========================================================
-def run_experiments(base_dir, file_list, python_exec, phase=0):
+def run_experiments(base_dir, file_list, python_exec, phase=0, seed=42):
+    set_seed(seed)
     print("\n" + "="*30)
-    print(f"STARTING EXPERIMENTS KPI - PHASE {phase}")
+    print(f"STARTING EXPERIMENTS KPI - PHASE {phase} (SEED {seed})")
     print("="*30)
 
     execution_times = []
@@ -181,16 +194,14 @@ def run_experiments(base_dir, file_list, python_exec, phase=0):
         print("No GPU available, memory tracking disabled")
 
     for fname in file_list:
-        print(f"\nRunning dataset: {fname}")
+        print(f"\nRunning dataset: {fname} (Seed {seed})")
         start = time.time()
 
         # Run pretext
         try:
             result_pretext = subprocess.run([
-                python_exec, "carla_pretext.py",
-                "--config_env", "configs/env.yml",
-                "--config_exp", "configs/pretext/carla_pretext_kpi.yml",
-                "--fname", fname
+                python_exec, "-c",
+                f"import sys, torch; sys.argv=['carla_pretext.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/pretext/carla_pretext_kpi.yml', '--fname', '{fname}']; import carla_pretext; carla_pretext.set_seed({seed}); carla_pretext.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
 
             # Parse GPU memory from pretext output
@@ -207,10 +218,8 @@ def run_experiments(base_dir, file_list, python_exec, phase=0):
         # Run classification
         try:
             result_classification = subprocess.run([
-                python_exec, "carla_classification.py",
-                "--config_env", "configs/env.yml",
-                "--config_exp", "configs/classification/carla_classification_kpi.yml",
-                "--fname", fname
+                python_exec, "-c",
+                f"import sys, torch; sys.argv=['carla_classification.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/classification/carla_classification_kpi.yml', '--fname', '{fname}']; import carla_classification; carla_classification.set_seed({seed}); carla_classification.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
 
             # Parse GPU memory from classification output
@@ -251,7 +260,8 @@ def run_experiments(base_dir, file_list, python_exec, phase=0):
         "TOTAL_TIME": total_time,
         "AVG_TIME": avg_time,
         "MAX_GPU_MEM_MB": max_gpu_mem_mb,
-        "DATASET_COUNT": len(execution_times)
+        "DATASET_COUNT": len(execution_times),
+        "SEED": seed
     }
 
 
@@ -404,7 +414,11 @@ def main():
     parser = argparse.ArgumentParser(description="Run KPI Experiments")
     parser.add_argument("--phase", type=int, default=0, choices=[0, 1, 2], 
                         help="Phase of execution: 0=All, 1=First Half, 2=Second Half")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed for experiments (default: 42)")
     args = parser.parse_args()
+
+    set_seed(args.seed)
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(BASE_DIR)
@@ -472,7 +486,7 @@ def main():
             data_files = file_list[mid_point:]
             print(f"PHASE 2: Running last {len(data_files)} datasets.")
 
-    current_time_stats = run_experiments(BASE_DIR, data_files, sys.executable, phase=args.phase)
+    current_time_stats = run_experiments(BASE_DIR, data_files, sys.executable, phase=args.phase, seed=args.seed)
 
     # Configure evaluation paths
     phase_1_metrics_file = "results/kpi/phase_1_metrics_df.csv"
