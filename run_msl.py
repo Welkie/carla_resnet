@@ -58,17 +58,16 @@ def add_summary_statistics(res_df):
 # =========================================================
 # RUN EXPERIMENTS
 # =========================================================
-def run_experiments(base_dir, data_info, python_exec, seed=42):
+def run_experiments(base_dir, data_info, python_exec, seed=4, wsz=300):
     set_seed(seed)
     print("\n" + "="*30)
-    print(f"STARTING EXPERIMENTS MSL (SEED {seed})")
+    print(f"STARTING EXPERIMENTS MSL (SEED {seed}, WSZ {wsz})")
     print("="*30)
     
     execution_times = []
     max_gpu_mem_mb = 0.0
     start_all = time.time()
 
-    # Initialize GPU memory tracking
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
         print(f"GPU available: {torch.cuda.get_device_name(0)}")
@@ -76,17 +75,16 @@ def run_experiments(base_dir, data_info, python_exec, seed=42):
         print("No GPU available, memory tracking disabled")
 
     for fname in data_info["chan_id"]:
-        print(f"\nRunning dataset: {fname} (Seed {seed})")
+        print(f"\nRunning dataset: {fname} (Seed {seed}, WSZ {wsz})")
         start = time.time()
 
         # Run pretext
         try:
             result_pretext = subprocess.run([
                 python_exec, "-c",
-                f"import sys, torch; sys.argv=['carla_pretext.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/pretext/carla_pretext_msl.yml', '--fname', '{fname}']; import carla_pretext; carla_pretext.set_seed({seed}); carla_pretext.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
+                f"import sys, torch; sys.argv=['carla_pretext.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/pretext/carla_pretext_msl.yml', '--fname', '{fname}', '--wsz', '{wsz}']; import carla_pretext; carla_pretext.set_seed({seed}); carla_pretext.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
             
-            # Parse GPU memory from pretext
             if "Max GPU Memory Used:" in result_pretext.stdout:
                 for line in result_pretext.stdout.split('\n'):
                     if "Max GPU Memory Used:" in line:
@@ -101,10 +99,9 @@ def run_experiments(base_dir, data_info, python_exec, seed=42):
         try:
             result_classification = subprocess.run([
                 python_exec, "-c",
-                f"import sys, torch; sys.argv=['carla_classification.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/classification/carla_classification_msl.yml', '--fname', '{fname}']; import carla_classification; carla_classification.set_seed({seed}); carla_classification.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
+                f"import sys, torch; sys.argv=['carla_classification.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/classification/carla_classification_msl.yml', '--fname', '{fname}', '--wsz', '{wsz}']; import carla_classification; carla_classification.set_seed({seed}); carla_classification.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
 
-            # Parse GPU memory from classification
             if "Max GPU Memory Used:" in result_classification.stdout:
                 for line in result_classification.stdout.split('\n'):
                     if "Max GPU Memory Used:" in line:
@@ -118,7 +115,6 @@ def run_experiments(base_dir, data_info, python_exec, seed=42):
         execution_times.append(time.time() - start)
         print(f"Max GPU Memory after {fname}: {max_gpu_mem_mb:.2f} MB")
 
-        # Track max GPU memory usage via torch if available locally
         if torch.cuda.is_available():
             current_max_mem = torch.cuda.max_memory_allocated() / 1024 / 1024
             max_gpu_mem_mb = max(max_gpu_mem_mb, current_max_mem)
@@ -128,30 +124,31 @@ def run_experiments(base_dir, data_info, python_exec, seed=42):
     avg_time = total_time / len(execution_times) if execution_times else 0
 
     print("\n" + "="*30)
-    print(f"DONE ALL MSL DATASETS (SEED {seed})")
+    print(f"DONE ALL MSL DATASETS (SEED {seed}, WSZ {wsz})")
     print(f"Total time: {total_time:.2f} s")
     print(f"Avg / dataset: {avg_time:.2f} s")
     print("="*30)
 
-    # Save time results
     os.makedirs("results/msl", exist_ok=True)
     time_results = {
         "TOTAL_TIME": total_time,
         "AVG_TIME": avg_time,
         "MAX_GPU_MEM_MB": max_gpu_mem_mb,
-        "SEED": seed
+        "SEED": seed,
+        "WSZ": wsz
     }
-    with open(f"results/msl/time_results_seed{seed}.json", "w") as f:
+    with open(f"results/msl/time_results_seed{seed}_wsz{wsz}.json", "w") as f:
         json.dump(time_results, f, indent=2)
     
+    print(f"\nTime results saved to results/msl/time_results_seed{seed}_wsz{wsz}.json")
     return time_results
 
 # =========================================================
 # EVALUATION (PAPER-STYLE)
 # =========================================================
-def evaluate_experiments(data_info, seed=42):
+def evaluate_experiments(data_info, seed=4, wsz=300):
     print("\n" + "="*30)
-    print(f"STARTING EVALUATION (PAPER STYLE - SEED {seed})")
+    print(f"STARTING EVALUATION (PAPER STYLE - SEED {seed}, WSZ {wsz})")
     print("="*30)
 
     res_df = pd.DataFrame(columns=[
@@ -187,7 +184,7 @@ def evaluate_experiments(data_info, seed=42):
             thr = t[idx]
 
             pred = scores >= thr
-            tn, fp, fn, tp = confusion_matrix(df_test["Class"], pred).ravel()
+            tn, fp, fn, tp = confusion_matrix(df_test["Class"], pred, labels=[0, 1]).ravel()
 
             res_df.loc[len(res_df)] = [
                 fname, pr_auc, tp, tn, fp, fn
@@ -204,11 +201,11 @@ def evaluate_experiments(data_info, seed=42):
 
     summary = add_summary_statistics(res_df)
 
-    with open(f"results/msl/evaluation_results_seed{seed}.json", "w") as f:
+    with open(f"results/msl/evaluation_results_seed{seed}_wsz{wsz}.json", "w") as f:
         json.dump(summary, f, indent=2)
 
     print("\n" + "="*30)
-    print(f"FINAL RESULTS (PAPER STYLE - SEED {seed})")
+    print(f"FINAL RESULTS (PAPER STYLE - SEED {seed}, WSZ {wsz})")
     print("="*30)
     for k, v in summary.items():
         if isinstance(v, float):
@@ -221,11 +218,11 @@ def evaluate_experiments(data_info, seed=42):
 # =========================================================
 # WRITE SUMMARY
 # =========================================================
-def write_summary(time_results, eval_results, seed=42):
+def write_summary(time_results, eval_results, seed=4, wsz=300):
     out = "results/msl/ketqua.txt"
 
     summary_lines = [
-        f"================ SUMMARY (SEED {seed}) ================",
+        f"================ SUMMARY (SEED {seed}, WSZ {wsz}) ================",
         f"Precision : {eval_results['PRECISION']:.4f}",
         f"Recall    : {eval_results['RECALL']:.4f}",
         f"F1-score  : {eval_results['F1']:.4f}",
@@ -239,11 +236,8 @@ def write_summary(time_results, eval_results, seed=42):
     ]
 
     summary_text = "\n".join(summary_lines)
-
-    # In ra màn hình
     print("\n" + summary_text)
 
-    # Ghi nối vào file ketqua.txt
     with open(out, "a") as f:
         f.write(summary_text + "\n\n")
 
@@ -256,25 +250,20 @@ def main():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(BASE_DIR)
 
-    # Define Kaggle input path
     kaggle_input_path = "/kaggle/input/datasets/patrickfleith/nasa-anomaly-detection-dataset-smap-msl"
     writable_dataset_path = os.path.join(BASE_DIR, "datasets", "MSL")
 
-    # Ensure writable directory exists
     os.makedirs(writable_dataset_path, exist_ok=True)
 
-    # Check if Kaggle input exists
     if os.path.exists(kaggle_input_path):
         print(f"Found Kaggle dataset at: {kaggle_input_path}")
 
-        # Copy labeled_anomalies.csv
         src_csv = os.path.join(kaggle_input_path, "labeled_anomalies.csv")
         dst_csv = os.path.join(writable_dataset_path, "labeled_anomalies.csv")
         if os.path.exists(src_csv) and not os.path.exists(dst_csv):
             print(f"Copying {src_csv} to {dst_csv}...")
             shutil.copyfile(src_csv, dst_csv)
         
-        # Function to safely copy directories
         def safe_copy_dir(src_subpath, dst_name):
             src = os.path.join(kaggle_input_path, src_subpath)
             dst = os.path.join(writable_dataset_path, dst_name)
@@ -287,7 +276,6 @@ def main():
             else:
                  print(f"Warning: Source directory {src} not found.")
 
-        # The structure is .../data/data/train and .../data/data/test
         safe_copy_dir(os.path.join("data", "data", "train"), "train")
         safe_copy_dir(os.path.join("data", "data", "test"), "test")
         
@@ -298,22 +286,28 @@ def main():
     data_info = pd.read_csv(csv_path)
     data_info = data_info[data_info["spacecraft"] == "MSL"]
 
-    # Xóa file ketqua.txt cũ nếu có trước khi chạy mới
+    # Clear previous ketqua.txt file if it exists
     out_txt = "results/msl/ketqua.txt"
     if os.path.exists(out_txt):
         os.remove(out_txt)
 
-    seeds = [42, 100]
-    for seed in seeds:
+    runs = [
+        {"seed": 4, "wsz": 300},
+        {"seed": 4, "wsz": 400},
+    ]
+
+    for idx, run_cfg in enumerate(runs, 1):
+        s = run_cfg["seed"]
+        w = run_cfg["wsz"]
         print("\n" + "="*50)
-        print(f"seed {seed}:")
+        print(f"Lần {idx}: seed {s}, wsz={w}")
         print("="*50)
 
-        time_results = run_experiments(BASE_DIR, data_info, sys.executable, seed=seed)
-        eval_results = evaluate_experiments(data_info, seed=seed)
+        time_results = run_experiments(BASE_DIR, data_info, sys.executable, seed=s, wsz=w)
+        eval_results = evaluate_experiments(data_info, seed=s, wsz=w)
 
         if time_results and eval_results:
-            write_summary(time_results, eval_results, seed=seed)
+            write_summary(time_results, eval_results, seed=s, wsz=w)
 
 if __name__ == "__main__":
     main()

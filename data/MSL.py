@@ -14,7 +14,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class MSL(Dataset):
     base_folder = ''
 
-    def __init__(self, fname, root=MyPath.db_root_dir('msl'), train=True, transform=None, sanomaly= None, mean_data=None, std_data=None):
+    def __init__(self, fname, root=MyPath.db_root_dir('msl'), train=True, transform=None, sanomaly= None, mean_data=None, std_data=None, wsz=200):
 
         super(MSL, self).__init__()
         self.root = root
@@ -24,7 +24,7 @@ class MSL(Dataset):
         self.classes = ['Normal', 'Anomaly']
         self.data = []
         self.targets = []
-        wsz, stride = 200, 1
+        stride = 1
 
         with open(os.path.join(self.root, 'labeled_anomalies.csv'), 'r') as file:
             csv_reader = pandas.read_csv(file, delimiter=',')
