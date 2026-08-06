@@ -241,6 +241,9 @@ def run_experiments(base_dir, file_list, python_exec, phase=0, seed=42):
             current_max_mem = torch.cuda.max_memory_allocated() / 1024 / 1024
             max_gpu_mem_mb = max(max_gpu_mem_mb, current_max_mem)
             torch.cuda.reset_peak_memory_stats()
+            torch.cuda.empty_cache()
+        import gc
+        gc.collect()
 
     total_time = sum(execution_times)
     

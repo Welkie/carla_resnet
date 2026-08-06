@@ -54,6 +54,8 @@ class KPI(Dataset):
         if self.train:
             self.mean = np.mean(data)
             self.std = np.std(data)
+            if self.std == 0.0: self.std = 1.0
+            data = (data - self.mean) / self.std
         else:
             if self.std == 0.0: self.std = 1.0
             data = (data - self.mean) / self.std
