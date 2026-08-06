@@ -73,47 +73,17 @@ class TSRepository(object):
     def furthest_nearest_neighbors(self, topk):
         features = self.features
 
-        # # Compute pairwise distances
-        # distances = torch.cdist(features, features)
-        #
-        # # Find indices of k nearest neighbors for each feature
-        # _, nearest_indices = distances.topk(topk + 1, largest=False, dim=1)
-        # k_nearest_neighbours = nearest_indices[:, 1:]  # exclude self as nearest neighbor
-        #
-        # # Find indices of k furthest neighbors for each feature
-        # _, furthest_indices = distances.topk(topk, largest=True, dim=1)
-        # k_furthest_neighbours = furthest_indices[:, :]
+        d = features.shape[1]
+        index = faiss.IndexFlatL2(d)
+        index.add(features.cpu().numpy())  # CUDA
 
-        # index = nmslib.init(method='hnsw', space='12')
-        # index.addDataPointBatch(features)
-        # index.createIndex({'post':2}, prin_progress = True)
-        # ids , distances = index.knnQueryBatch(features, k=len(features), num_threads=4)
-        #
-        # k_furthest_neighbours = ids[:, -1:]
-        # k_nearest_neighbours = ids[:, 1:]
-
-
-        feat_np = self.features.cpu().numpy().astype(np.float32)
-        N, d = feat_np.shape
-
-        # FAISS index for nearest neighbors (L2 distance)
-        index_near = faiss.IndexFlatL2(d)
-        index_near.add(feat_np)
-        # Search topk + 1 (first neighbor is sample itself)
-        _, nearest_ids = index_near.search(feat_np, min(topk + 1, N))
-        if nearest_ids.shape[1] > 1:
-            k_nearest_neighbours = nearest_ids[:, 1:]
-        else:
-            k_nearest_neighbours = nearest_ids
-
-        # FAISS index for furthest neighbors (invert sign to query furthest in L2 distance)
-        index_far = faiss.IndexFlatL2(d)
-        index_far.add(-feat_np)
-        _, furthest_ids = index_far.search(feat_np, min(topk, N))
-        k_furthest_neighbours = furthest_ids
+        xq = np.random.random(d)
+        _, ids = index.search(xq.reshape(1, -1).astype(np.float32), len(features))
+        sz = ids.shape[1]
+        k_furthest_neighbours = ids.reshape(sz, 1)[::-1]
+        k_nearest_neighbours = ids[:, :].reshape(sz, 1)
 
         return k_furthest_neighbours, k_nearest_neighbours
-
 
     def reset(self):
         self.ptr = 0
@@ -128,13 +98,9 @@ class TSRepository(object):
         
         assert(b + self.ptr <= self.n)
         
-        # Move to device of repository (likely CPU)
-        self.features[self.ptr:self.ptr+b].copy_(features.detach().to(self.device))
-        
-        if not torch.is_tensor(targets): 
-            targets = torch.from_numpy(targets)
-        
-        self.targets[self.ptr:self.ptr+b].copy_(targets.detach().to(self.device))
+        self.features[self.ptr:self.ptr+b].copy_(features.detach())
+        if not torch.is_tensor(targets): targets = torch.from_numpy(targets)
+        self.targets[self.ptr:self.ptr+b].copy_(targets.detach())
         self.ptr += b
 
     def to(self, device):

@@ -1,4 +1,3 @@
-
 import os
 import pandas as pd
 import numpy as np
@@ -43,7 +42,7 @@ class KPI(Dataset):
         file_path = os.path.join(self.root, self.base_folder, fname)
         temp = pd.read_csv(file_path)
         temp = temp.set_index(['timestamp']).sort_index()
-        data = np.asarray(temp['value'])[:, np.newaxis]
+        data = np.asarray(temp['value'])
         labels = np.asarray(temp['label'])
 
         if np.any(sum(np.isnan(data))!=0):
@@ -54,14 +53,29 @@ class KPI(Dataset):
         if self.train:
             self.mean = np.mean(data)
             self.std = np.std(data)
-            if self.std == 0.0: self.std = 1.0
-            data = (data - self.mean) / self.std
         else:
             if self.std == 0.0: self.std = 1.0
             data = (data - self.mean) / self.std
 
         self.targets = labels
         self.data = data
+
+        # Dynamic window size adjustment based on actual data length
+        if len(self.data) < wsize:
+            if len(self.data) >= 2048:
+                wsize = 2048
+            elif len(self.data) >= 1024:
+                wsize = 1024
+            elif len(self.data) >= 512:
+                wsize = 512
+            elif len(self.data) >= 256:
+                wsize = 256
+            else:
+                raise ValueError(
+                    f"Dataset too short ({len(self.data)} samples) for minimum window size 256. "
+                    f"Try a larger split or smaller window."
+                )
+
         self.data, self.targets = self.convert_to_windows(wsize, wstride)
 
     def convert_to_windows(self, w_size, stride):
@@ -85,15 +99,19 @@ class KPI(Dataset):
         Returns:
             dict: {'ts': ts, 'target': index of target class, 'meta': dict}
         """
-        ts_org = torch.from_numpy(self.data[index]).float()
+        ts_org = torch.from_numpy(self.data[index]).float().to(device)  # cuda
         if len(self.targets) > 0:
-            target = torch.tensor(self.targets[index].astype(int), dtype=torch.long)
+            target = torch.tensor(self.targets[index].astype(int), dtype=torch.long).to(device)
             class_name = self.classes[target]
         else:
             target = 0
             class_name = ''
 
-        ts_size = (ts_org.shape[0], ts_org.shape[1])
+        # Handle univariate (1D) and multivariate (2D) tensors safely
+        if ts_org.ndim == 1:
+            ts_size = (ts_org.shape[0], 1)
+        else:
+            ts_size = (ts_org.shape[0], ts_org.shape[1])
 
         out = {'ts_org': ts_org, 'target': target, 'meta': {'ts_size': ts_size, 'index': index, 'class_name': class_name}}
 

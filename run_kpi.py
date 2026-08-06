@@ -4,7 +4,6 @@ import time
 import json
 import subprocess
 import shutil
-import random
 import torch
 import numpy as np
 import pandas as pd
@@ -12,17 +11,6 @@ from sklearn.metrics import average_precision_score, confusion_matrix, precision
 import argparse
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
-
-def set_seed(seed=42):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    os.environ["PYTHONHASHSEED"] = str(seed)
 
 # =========================================================
 # PAPER-STYLE SUMMARY
@@ -62,8 +50,8 @@ def prepare_kpi_data(hdf_path, writable_dataset_path):
     Reads the phase2_ground_truth.hdf file which contains all 29 KPIs.
     Splits each KPI 50/50 (first half = train, second half = test).
     Saves per-KPI CSVs to:
-        datasets/kpi/train/<kpi_name>.csv
-        datasets/kpi/test/<kpi_name>.csv
+        datasets/KPI/train/<kpi_name>.csv
+        datasets/KPI/test/<kpi_name>.csv
     Columns: timestamp, value, label
     Train label column is kept (all values preserved) but CARLA trains unsupervised.
     Returns the sorted list of CSV filenames (e.g. ["kpi_0.csv", "kpi_1.csv", ...]).
@@ -74,11 +62,9 @@ def prepare_kpi_data(hdf_path, writable_dataset_path):
     os.makedirs(test_dir,  exist_ok=True)
 
     print(f"Reading HDF5 file: {hdf_path}")
-    # The HDF5 stores a DataFrame; try reading as HDF store first, then fallback to direct read
     try:
         df_all = pd.read_hdf(hdf_path, key='data')
     except Exception:
-        # Some HDF files use a default key or different structure
         try:
             store = pd.HDFStore(hdf_path, 'r')
             key = store.keys()[0]
@@ -90,17 +76,14 @@ def prepare_kpi_data(hdf_path, writable_dataset_path):
 
     print(f"HDF5 loaded — shape: {df_all.shape}, columns: {list(df_all.columns)}")
 
-    # === Normalise column names (case-insensitive) ===
     col_lower = {c.lower(): c for c in df_all.columns}
 
-    # Identify KPI-id / group column
     kpi_col = None
     for cand in ['kpi_id', 'kpi id', 'series', 'metric', 'name', 'id']:
         if cand in col_lower:
             kpi_col = col_lower[cand]
             break
     if kpi_col is None:
-        # last-resort: pick the non-numeric column that is not timestamp/value/label
         for c in df_all.columns:
             if df_all[c].dtype == object:
                 kpi_col = c
@@ -125,11 +108,9 @@ def prepare_kpi_data(hdf_path, writable_dataset_path):
     for kpi_id in kpi_groups:
         kpi_df = df_all[df_all[kpi_col] == kpi_id].copy()
 
-        # Sort by timestamp if available
         if timestamp_col is not None:
             kpi_df = kpi_df.sort_values(by=timestamp_col)
 
-        # Build a clean DataFrame with exactly the columns KPI.py expects
         if timestamp_col is not None:
             out_df = pd.DataFrame({
                 'timestamp': kpi_df[timestamp_col].values,
@@ -143,19 +124,16 @@ def prepare_kpi_data(hdf_path, writable_dataset_path):
                 'label':     kpi_df[label_col].values.astype(int)
             })
 
-        # 50/50 split
         split_idx = len(out_df) // 2
         train_df  = out_df.iloc[:split_idx].reset_index(drop=True)
         test_df   = out_df.iloc[split_idx:].reset_index(drop=True)
 
-        # Sanitise KPI name for use as filename
         safe_name = str(kpi_id).replace("/", "_").replace("\\", "_").replace(" ", "_")
         csv_name  = f"{safe_name}.csv"
 
         train_path = os.path.join(train_dir, csv_name)
         test_path  = os.path.join(test_dir,  csv_name)
 
-        # Only write if not already present (idempotent re-runs)
         if not os.path.exists(train_path):
             train_df.to_csv(train_path, index=False)
         if not os.path.exists(test_path):
@@ -177,7 +155,6 @@ def prepare_kpi_data(hdf_path, writable_dataset_path):
 # RUN EXPERIMENTS
 # =========================================================
 def run_experiments(base_dir, file_list, python_exec, phase=0, seed=42):
-    set_seed(seed)
     print("\n" + "="*30)
     print(f"STARTING EXPERIMENTS KPI - PHASE {phase} (SEED {seed})")
     print("="*30)
@@ -186,7 +163,6 @@ def run_experiments(base_dir, file_list, python_exec, phase=0, seed=42):
     max_gpu_mem_mb = 0.0
     start_all = time.time()
 
-    # Initialize GPU memory tracking
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
         print(f"GPU available: {torch.cuda.get_device_name(0)}")
@@ -204,7 +180,6 @@ def run_experiments(base_dir, file_list, python_exec, phase=0, seed=42):
                 f"import sys, torch; sys.argv=['carla_pretext.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/pretext/carla_pretext_kpi.yml', '--fname', '{fname}']; import carla_pretext; carla_pretext.set_seed({seed}); carla_pretext.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
 
-            # Parse GPU memory from pretext output
             if "Max GPU Memory Used:" in result_pretext.stdout:
                 for line in result_pretext.stdout.split('\n'):
                     if "Max GPU Memory Used:" in line:
@@ -213,7 +188,7 @@ def run_experiments(base_dir, file_list, python_exec, phase=0, seed=42):
                         break
         except subprocess.CalledProcessError as e:
             print(f"Error running pretext for {fname}: {e}")
-            print(e.stderr[-3000:])  # Print last 3000 chars of stderr
+            print(e.stderr[-3000:] if e.stderr else "")
 
         # Run classification
         try:
@@ -222,7 +197,6 @@ def run_experiments(base_dir, file_list, python_exec, phase=0, seed=42):
                 f"import sys, torch; sys.argv=['carla_classification.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/classification/carla_classification_kpi.yml', '--fname', '{fname}']; import carla_classification; carla_classification.set_seed({seed}); carla_classification.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
 
-            # Parse GPU memory from classification output
             if "Max GPU Memory Used:" in result_classification.stdout:
                 for line in result_classification.stdout.split('\n'):
                     if "Max GPU Memory Used:" in line:
@@ -231,23 +205,18 @@ def run_experiments(base_dir, file_list, python_exec, phase=0, seed=42):
                         break
         except subprocess.CalledProcessError as e:
             print(f"Error running classification for {fname}: {e}")
-            print(e.stderr[-3000:])
+            print(e.stderr[-3000:] if e.stderr else "")
 
         execution_times.append(time.time() - start)
         print(f"Max GPU Memory after {fname}: {max_gpu_mem_mb:.2f} MB")
 
-        # Also track via torch directly if available
         if torch.cuda.is_available():
             current_max_mem = torch.cuda.max_memory_allocated() / 1024 / 1024
             max_gpu_mem_mb = max(max_gpu_mem_mb, current_max_mem)
             torch.cuda.reset_peak_memory_stats()
-            torch.cuda.empty_cache()
-        import gc
-        gc.collect()
 
     total_time = sum(execution_times)
     
-    # If running Phase 0 (all at once), use wall clock for total time
     if phase == 0:
         total_time = time.time() - start_all
     
@@ -263,8 +232,7 @@ def run_experiments(base_dir, file_list, python_exec, phase=0, seed=42):
         "TOTAL_TIME": total_time,
         "AVG_TIME": avg_time,
         "MAX_GPU_MEM_MB": max_gpu_mem_mb,
-        "DATASET_COUNT": len(execution_times),
-        "SEED": seed
+        "DATASET_COUNT": len(execution_times)
     }
 
 
@@ -276,19 +244,15 @@ def evaluate_experiments(file_list, prev_metrics_file=None, output_metrics_file=
     print("STARTING EVALUATION KPI")
     print("="*30)
 
-    # DataFrame to store metrics
     res_df = pd.DataFrame(columns=[
         "name", "pr",
         "best_tp", "best_tn", "best_fp", "best_fn"
     ])
 
-    # Load previous metrics if provided
     if prev_metrics_file and os.path.exists(prev_metrics_file):
         try:
             prev_df = pd.read_csv(prev_metrics_file)
-            # Ensure columns match
             if not prev_df.empty and all(col in prev_df.columns for col in res_df.columns):
-                # Avoid FutureWarning by checking if res_df is empty
                 if res_df.empty:
                     res_df = prev_df
                 else:
@@ -299,9 +263,7 @@ def evaluate_experiments(file_list, prev_metrics_file=None, output_metrics_file=
         except Exception as e:
             print(f"Warning: Could not load previous metrics from {prev_metrics_file}: {e}")
 
-    # Process new files
     for fname in file_list:
-        # Check if already in res_df (avoid duplicates if re-running)
         if fname in res_df["name"].values:
             print(f"Skipping {fname} (already evaluated)")
             continue
@@ -317,7 +279,7 @@ def evaluate_experiments(file_list, prev_metrics_file=None, output_metrics_file=
             df_test  = pd.read_csv(test_path)
             df_train = pd.read_csv(train_path)
 
-            cl_num = df_test.shape[1] - 1  # number of class columns
+            cl_num = df_test.shape[1] - 1
 
             df_train["pred"] = df_train.iloc[:, :cl_num].idxmax(axis=1)
             normal_class = df_train["pred"].value_counts().idxmax()
@@ -351,7 +313,6 @@ def evaluate_experiments(file_list, prev_metrics_file=None, output_metrics_file=
         print("No results!")
         return None
 
-    # Save metrics to file if requested
     if output_metrics_file:
         try:
             res_df.to_csv(output_metrics_file, index=False)
@@ -361,7 +322,6 @@ def evaluate_experiments(file_list, prev_metrics_file=None, output_metrics_file=
 
     summary = add_summary_statistics(res_df)
 
-    # Save final json summary
     os.makedirs("results/kpi", exist_ok=True)
     with open("results/kpi/evaluation_results.json", "w") as f:
         json.dump(summary, f, indent=2)
@@ -400,10 +360,8 @@ def write_summary(time_results, eval_results):
 
     summary_text = "\n".join(summary_lines)
 
-    # Print to stdout
     print("\n" + summary_text)
 
-    # Write to file
     with open(out, "w") as f:
         f.write(summary_text + "\n")
 
@@ -417,23 +375,13 @@ def main():
     parser = argparse.ArgumentParser(description="Run KPI Experiments")
     parser.add_argument("--phase", type=int, default=0, choices=[0, 1, 2], 
                         help="Phase of execution: 0=All, 1=First Half, 2=Second Half")
-    parser.add_argument("--seed", type=int, default=100,
-                        help="Random seed for experiments (default: 100)")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed for experiments (default: 42)")
     args = parser.parse_args()
-
-    set_seed(args.seed)
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(BASE_DIR)
 
-    # ===========================================================
-    # KPI-Anomaly-Detection dataset on Kaggle
-    # HDF5 path: /kaggle/input/datasets/minhanhphm1676/kpi-anomaly-dectection/
-    #            KPI-Anomaly-Detection-master/Finals_dataset/
-    #            phase2_ground_truth.hdf/phase2_ground_truth.hdf
-    # 29 KPI series, ~2.9 M rows total.
-    # Split per KPI: first 50% → train (unsupervised), second 50% → test.
-    # ===========================================================
     kaggle_hdf_path = (
         "/kaggle/input/datasets/minhanhphm1676/kpi-anomaly-dectection"
         "/KPI-Anomaly-Detection-master/Finals_dataset"
@@ -441,13 +389,11 @@ def main():
     )
     writable_dataset_path = os.path.join(BASE_DIR, "datasets", "KPI")
 
-    # Ensure writable directory exists
     os.makedirs(writable_dataset_path, exist_ok=True)
 
     train_dir = os.path.join(writable_dataset_path, "train")
     test_dir  = os.path.join(writable_dataset_path, "test")
 
-    # Prepare data only if not already extracted
     existing_train_files = (
         [f for f in os.listdir(train_dir) if f.endswith(".csv")]
         if os.path.exists(train_dir) else []
@@ -461,7 +407,6 @@ def main():
         print(f"Found Kaggle HDF5 at: {kaggle_hdf_path}")
         file_list = prepare_kpi_data(kaggle_hdf_path, writable_dataset_path)
     else:
-        # Fallback: look for local HDF5 in datasets/KPI/
         local_hdf = os.path.join(writable_dataset_path, "phase2_ground_truth.hdf")
         if os.path.exists(local_hdf):
             print(f"Using local HDF5 at: {local_hdf}")
@@ -477,7 +422,6 @@ def main():
         print("ERROR: No KPI CSV files found or generated. Exiting.")
         return
 
-    # Split datasets based on phase
     if args.phase == 0:
         data_files = file_list
     else:
@@ -485,40 +429,34 @@ def main():
         if args.phase == 1:
             data_files = file_list[:mid_point]
             print(f"PHASE 1: Running first {len(data_files)} datasets.")
-        else: # phase 2
-            data_files = file_list[mid_point:]
-            print(f"PHASE 2: Running last {len(data_files)} datasets.")
+        else:
+            data_files = file_list[mid_point:mid_point + 14]
+            print(f"PHASE 2: Running next {len(data_files)} datasets (limited to 14 datasets).")
 
     current_time_stats = run_experiments(BASE_DIR, data_files, sys.executable, phase=args.phase, seed=args.seed)
 
-    # Configure evaluation paths
     phase_1_metrics_file = "results/kpi/phase_1_metrics_df.csv"
     phase_1_time_file = "results/kpi/phase_1_time_stats.json"
 
     if args.phase == 1:
-        # Phase 1: Evaluate current files and save metrics + time stats
         print("\nEvaluating Phase 1 results...")
         evaluate_experiments(data_files, output_metrics_file=phase_1_metrics_file)
         
-        # Save time stats
         with open(phase_1_time_file, "w") as f:
             json.dump(current_time_stats, f, indent=2)
             
         print(f"Phase 1 completed. Please push '{phase_1_metrics_file}' and '{phase_1_time_file}' to continue in Phase 2.")
         
     elif args.phase == 2:
-        # Phase 2: Load Phase 1 metrics (if available) and evaluate current files
         print("\nEvaluating Phase 2 results (merging with Phase 1)...")
         eval_results = evaluate_experiments(data_files, prev_metrics_file=phase_1_metrics_file, output_metrics_file="results/kpi/full_metrics.csv") 
         
-        # Merge time stats
         final_time_stats = current_time_stats.copy()
         if os.path.exists(phase_1_time_file):
             try:
                 with open(phase_1_time_file, "r") as f:
                     phase_1_stats = json.load(f)
                     
-                    # Merge logic
                     total_time = phase_1_stats.get("TOTAL_TIME", 0) + current_time_stats.get("TOTAL_TIME", 0)
                     dataset_count = phase_1_stats.get("DATASET_COUNT", 0) + current_time_stats.get("DATASET_COUNT", 0)
                     max_mem = max(phase_1_stats.get("MAX_GPU_MEM_MB", 0), current_time_stats.get("MAX_GPU_MEM_MB", 0))
@@ -538,9 +476,8 @@ def main():
         if eval_results:
             write_summary(final_time_stats, eval_results)
             
-    else: # Phase 0
+    else:
         print("\nVerifying all results for evaluation...")
-        # Evaluate all files directly 
         eval_results = evaluate_experiments(file_list, output_metrics_file="results/kpi/full_metrics.csv")
         
         if eval_results:

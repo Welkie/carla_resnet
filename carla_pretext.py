@@ -44,10 +44,6 @@ parser.add_argument('--wsz', type=int, default=200,
 args = parser.parse_args()
 
 def main():
-    # # Set PyTorch-specific threading options
-    # torch.set_num_threads(1)
-    # torch.set_num_interop_threads(1) 
-
     print(colored('CARLA Pretext stage --> ', 'yellow'))
     p = create_config(args.config_env, args.config_exp, args.fname)
     if hasattr(args, 'wsz') and args.wsz:
@@ -56,9 +52,6 @@ def main():
     model = get_model(p)
     best_model = None
     model = model.to(device)
-   
-    # CUDNN
-    # torch.backends.cudnn.benchmark = True
 
     train_transforms = get_train_transformations(p)
 
@@ -79,8 +72,6 @@ def main():
                                                   split='train+unlabeled')
                     val_dataset = get_val_dataset(p, val_transforms, sanomaly, False, train_dataset.mean,
                                               train_dataset.std)
-                    # base_dataset = get_train_dataset(p, train_transforms, sanomaly, to_augmented_dataset=True,
-                    #                                  split='train')
                 else:
                     new_train_dataset = get_train_dataset(p, train_transforms, sanomaly, to_augmented_dataset=True,
                                                   split='train+unlabeled')
@@ -89,7 +80,6 @@ def main():
 
                     train_dataset.concat_ds(new_train_dataset)
                     val_dataset.concat_ds(new_val_dataset)
-                    # base_dataset.concat_ds(new_train_dataset)
 
                 ii += 1
         else:
@@ -97,8 +87,6 @@ def main():
                                               split='train+unlabeled')
             val_dataset = get_val_dataset(p, val_transforms, sanomaly, False, train_dataset.mean,
                                           train_dataset.std)
-            # base_dataset = get_train_dataset(p, train_transforms, sanomaly, to_augmented_dataset=True,
-            #                                  split='train') # Dataset w/o augs for knn eval
 
     elif p['train_db_name'] == 'yahoo':
         filename = os.path.join(MyPath.db_root_dir('yahoo'), p['fname'])
@@ -139,8 +127,6 @@ def main():
                                           to_augmented_dataset=True, data=TRAIN_TS, label=train_label)
         val_dataset = get_val_dataset(p, val_transforms, sanomaly, False, train_dataset.mean,
                                           train_dataset.std, TEST_TS, test_label)
-        # base_dataset = get_train_dataset(p, train_transforms, sanomaly,
-        #                                   to_augmented_dataset=True, data=TRAIN_TS, label=train_label)
 
     elif p['train_db_name'] == 'smd' or p['train_db_name'] == 'kpi' or p['train_db_name'] == 'swat' \
         or p['train_db_name'] == 'swan' or p['train_db_name'] == 'gecco' or p['train_db_name'] == 'wadi' or p['train_db_name'] == 'ucr':
@@ -149,34 +135,29 @@ def main():
                                       train_dataset.std)
 
     train_dataloader = get_train_dataloader(p, train_dataset)
-    val_dataloader = get_val_dataloader(p, val_dataset)
+    val_dataloader = get_val_dataloader(p, train_dataset)
     base_dataloader = get_val_dataloader(p, train_dataset)
 
     print('Dataset contains {}/{} train/val samples'.format(len(train_dataset), len(val_dataset)))
-    
-    # TS Repository
-   # base_dataset = get_train_dataset(p, train_transforms, panomaly, sanomaly, to_augmented_dataset=True, split='train')
 
     ts_repository_base = TSRepository(len(train_dataset),
                                       p['model_kwargs']['features_dim'],
                                       p['num_classes'], p['criterion_kwargs']['temperature'])
-    # ts_repository_base.to(device) # Keep on CPU
     ts_repository_val = TSRepository(len(val_dataset),
                                      p['model_kwargs']['features_dim'],
                                      p['num_classes'], p['criterion_kwargs']['temperature'])
-    # ts_repository_val.to(device) # Keep on CPU
 
+    # Optimizer
+    optimizer = get_optimizer(p, model)
+
+    # Loss function
     criterion = get_criterion(p)
-    criterion = criterion.to(device)
+    criterion.to(device)
 
-    # optimizer = get_optimizer(p, model)
-    optimizer = torch.optim.Adam(model.parameters(), lr=p['optimizer_kwargs']['lr'])
- 
     # Checkpoint
     if os.path.exists(p['pretext_checkpoint']):
         print(colored('Restart from checkpoint {}'.format(p['pretext_checkpoint']), 'blue'))
         checkpoint = torch.load(p['pretext_checkpoint'], map_location='cpu')
-        optimizer.load_state_dict(checkpoint['optimizer'])
         model.load_state_dict(checkpoint['model'])
         model.to(device)
         start_epoch = checkpoint['epoch']
@@ -185,7 +166,7 @@ def main():
         print(colored('No checkpoint file at {}'.format(p['pretext_checkpoint']), 'blue'))
         start_epoch = 0
         model = model.to(device)
-    
+
     # Training
     pretext_best_loss = np.inf
     prev_loss = None
@@ -195,11 +176,9 @@ def main():
 
         lr = adjust_learning_rate(p, optimizer, epoch)
         print('Adjusted learning rate to {:.5f}'.format(lr))
-        
-        # print('EPOCH ----> ', epoch)
+
         tmp_loss = pretext_train(train_dataloader, model, criterion, optimizer, epoch, prev_loss, device=device)
-        
-        # Checkpoint
+
         if tmp_loss <= pretext_best_loss:
             pretext_best_loss = tmp_loss
             best_model = model
@@ -208,13 +187,11 @@ def main():
     torch.save(best_model.state_dict(), p['pretext_model'])
 
     # Mine the topk nearest neighbors at the very end (Train)
-    # These will be served as input to the classification loss.
     print(colored('Fill TS Repository for mining the nearest/furthest neighbors (train) ...', 'blue'))
     ts_repository_aug = TSRepository(len(train_dataset) * 2,
                                      p['model_kwargs']['features_dim'],
-                                     p['num_classes'], p['criterion_kwargs']['temperature']) #need size of repository == 1+num_of_anomalies
+                                     p['num_classes'], p['criterion_kwargs']['temperature'])
     fill_ts_repository(p, base_dataloader, model, ts_repository_base, real_aug = True, ts_repository_aug = ts_repository_aug)
-    # out_pre = np.column_stack((ts_repository_base.features, ts_repository_base.targets))
     out_pre = np.column_stack((ts_repository_base.features.cpu().numpy(), ts_repository_base.targets.cpu().numpy()))
 
     np.save(p['pretext_features_train_path'], out_pre)
@@ -225,11 +202,9 @@ def main():
     np.save(p['bottomk_neighbors_train_path'], kfurtherst)
 
     # Mine the topk nearest neighbors at the very end (Val)
-    # These will be used for validation.
     print(colored('Fill TS Repository for mining the nearest/furthest neighbors (val) ...', 'blue'))
 
     fill_ts_repository(p, val_dataloader, model, ts_repository_val, real_aug=False, ts_repository_aug=None)
-    # out_pre = np.column_stack((ts_repository_val.features, ts_repository_val.targets))
     out_pre = np.column_stack((ts_repository_val.features.cpu().numpy(), ts_repository_val.targets.cpu().numpy()))
 
     np.save(p['pretext_features_test_path'], out_pre)
@@ -239,9 +214,6 @@ def main():
     np.save(p['topk_neighbors_val_path'], knearest)
     np.save(p['bottomk_neighbors_val_path'], kfurtherst)
 
- 
+
 if __name__ == '__main__':
     main()
-    if torch.cuda.is_available():
-        max_mem = torch.cuda.max_memory_allocated() / 1024 / 1024
-        print(f"Max GPU Memory Used: {max_mem:.2f} MB")

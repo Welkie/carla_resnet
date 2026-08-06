@@ -43,9 +43,6 @@ def main():
         p['wsz'] = args.wsz
     print(colored('CARLA Self-supervised Classification stage --> ', 'yellow'))
 
-    # CUDNN
-   # torch.backends.cudnn.benchmark = True
-
     # Data
     print(colored('\n- Get dataset and dataloaders for ' + p['train_db_name'] + ' dataset - timeseries ' + p['fname'], 'green'))
     train_transformations = get_train_transformations(p)
@@ -76,14 +73,12 @@ def main():
                     base_dataset.concat_ds(new_base_dataset)
                 ii+=1
         else:
-            #base_dataset = get_aug_train_dataset(p, train_transformations, to_neighbors_dataset = True)
             info_ds = get_train_dataset(p, train_transformations, sanomaly, to_neighbors_dataset=False)
             val_dataset = get_val_dataset(p, val_transformations, sanomaly, False, info_ds.mean, info_ds.std)
 
     elif p['train_db_name'] == 'yahoo':
         filename = os.path.join(MyPath.db_root_dir('yahoo'), p['fname'])
         dataset = []
-        # print(filename)
         df = pandas.read_csv(filename)
         dataset.append({
             'value': df['value'].tolist(),
@@ -167,7 +162,6 @@ def main():
 
 
     best_f1 = -1 * np.inf
-    # best_loss = np.inf
     print(colored('\n- Training:', 'blue'))
     for epoch in range(start_epoch, p['epochs']):
         print(colored('-- Epoch %d/%d' %(epoch+1, p['epochs']), 'blue'))
@@ -196,16 +190,10 @@ def main():
         if rep_f1 > best_f1:
             best_f1 = rep_f1
             nomral_label = majority_label
-            # print('New Checkpoint ...')
             torch.save({'model': model.module.state_dict(), 'head': best_loss_head, 'normal_label': normal_label}, p['classification_model'])
             torch.save({'optimizer': optimizer.state_dict(), 'model': model.state_dict(),
                         'epoch': epoch + 1, 'best_loss': best_loss, 'best_loss_head': best_loss_head, 'normal_label': normal_label},
                        p['classification_checkpoint'])
-
-        del predictions, tst_dl
-        import gc
-        gc.collect()
-
 
     model_checkpoint = torch.load(p['classification_model'], map_location='cpu')
     model.module.load_state_dict(model_checkpoint['model'])
