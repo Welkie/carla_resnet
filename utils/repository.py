@@ -93,16 +93,24 @@ class TSRepository(object):
         # k_nearest_neighbours = ids[:, 1:]
 
 
-        d = features.shape[1]
-        index = faiss.IndexFlatL2(d)
-        # index.add(features)
-        index.add(features.cpu().numpy())  # CUDA
+        feat_np = self.features.cpu().numpy().astype(np.float32)
+        N, d = feat_np.shape
 
-        xq = np.random.random(d)
-        _, ids = index.search(xq.reshape(1, -1).astype(np.float32), len(features))
-        sz = ids.shape[1]
-        k_furthest_neighbours = ids.reshape(sz, 1)[::-1]
-        k_nearest_neighbours = ids[:, :].reshape(sz, 1)
+        # FAISS index for nearest neighbors (L2 distance)
+        index_near = faiss.IndexFlatL2(d)
+        index_near.add(feat_np)
+        # Search topk + 1 (first neighbor is sample itself)
+        _, nearest_ids = index_near.search(feat_np, min(topk + 1, N))
+        if nearest_ids.shape[1] > 1:
+            k_nearest_neighbours = nearest_ids[:, 1:]
+        else:
+            k_nearest_neighbours = nearest_ids
+
+        # FAISS index for furthest neighbors (invert sign to query furthest in L2 distance)
+        index_far = faiss.IndexFlatL2(d)
+        index_far.add(-feat_np)
+        _, furthest_ids = index_far.search(feat_np, min(topk, N))
+        k_furthest_neighbours = furthest_ids
 
         return k_furthest_neighbours, k_nearest_neighbours
 
