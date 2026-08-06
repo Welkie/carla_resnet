@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import json
+import random
 import subprocess
 import torch
 import numpy as np
@@ -10,6 +11,20 @@ from sklearn.metrics import average_precision_score, confusion_matrix, precision
 import argparse
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+# =========================================================
+# SEED SETTING
+# =========================================================
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ["PYTHONHASHSEED"] = str(seed)
 
 # =========================================================
 # PAPER-STYLE SUMMARY
@@ -39,12 +54,14 @@ def add_summary_statistics(res_df):
         "FN": int(sum_fn),
         "TOTAL_DATASETS": len(res_df)
     }
+
 # =========================================================
 # RUN EXPERIMENTS
 # =========================================================
-def run_experiments(data_files, python_exec, phase=0):
+def run_experiments(data_files, python_exec, phase=0, seed=42):
+    set_seed(seed)
     print("\n" + "="*30)
-    print(f"STARTING EXPERIMENTS SMD - PHASE {phase}")
+    print(f"STARTING EXPERIMENTS SMD - PHASE {phase} (SEED {seed})")
     print("="*30)
     
     execution_times = []
@@ -59,16 +76,14 @@ def run_experiments(data_files, python_exec, phase=0):
         print("No GPU available, memory tracking disabled")
 
     for fname in data_files:
-        print(f"\nRunning dataset: {fname}")
+        print(f"\nRunning dataset: {fname} (Seed {seed})")
         start = time.time()
 
         # Run pretext
         try:
             result_pretext = subprocess.run([
-                python_exec, "carla_pretext.py",
-                "--config_env", "configs/env.yml",
-                "--config_exp", "configs/pretext/carla_pretext_smd.yml",
-                "--fname", fname
+                python_exec, "-c",
+                f"import sys, torch; sys.argv=['carla_pretext.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/pretext/carla_pretext_smd.yml', '--fname', '{fname}']; import carla_pretext; carla_pretext.set_seed({seed}); carla_pretext.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
             
             # Parse GPU memory from pretext
@@ -85,10 +100,8 @@ def run_experiments(data_files, python_exec, phase=0):
         # Run classification
         try:
             result_classification = subprocess.run([
-                python_exec, "carla_classification.py",
-                "--config_env", "configs/env.yml",
-                "--config_exp", "configs/classification/carla_classification_smd.yml",
-                "--fname", fname
+                python_exec, "-c",
+                f"import sys, torch; sys.argv=['carla_classification.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/classification/carla_classification_smd.yml', '--fname', '{fname}']; import carla_classification; carla_classification.set_seed({seed}); carla_classification.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
 
             # Parse GPU memory from classification
@@ -135,9 +148,9 @@ def run_experiments(data_files, python_exec, phase=0):
 # =========================================================
 # EVALUATION (PAPER-STYLE)
 # =========================================================
-def evaluate_experiments(data_files, prev_metrics_file=None, output_metrics_file=None):
+def evaluate_experiments(data_files, prev_metrics_file=None, output_metrics_file=None, seed=42):
     print("\n" + "="*30)
-    print("STARTING EVALUATION SMD")
+    print(f"STARTING EVALUATION SMD (SEED {seed})")
     print("="*30)
 
     # DataFrame to store metrics
@@ -150,9 +163,7 @@ def evaluate_experiments(data_files, prev_metrics_file=None, output_metrics_file
     if prev_metrics_file and os.path.exists(prev_metrics_file):
         try:
             prev_df = pd.read_csv(prev_metrics_file)
-            # Ensure columns match
             if not prev_df.empty and all(col in prev_df.columns for col in res_df.columns):
-                # Avoid FutureWarning by checking if res_df is empty
                 if res_df.empty:
                     res_df = prev_df
                 else:
@@ -165,7 +176,6 @@ def evaluate_experiments(data_files, prev_metrics_file=None, output_metrics_file
 
     # Process new files
     for fname in data_files:
-        # Check if already in res_df (avoid duplicates if re-running)
         if fname in res_df["name"].values:
             print(f"Skipping {fname} (already evaluated)")
             continue
@@ -215,7 +225,6 @@ def evaluate_experiments(data_files, prev_metrics_file=None, output_metrics_file
         print("No results!")
         return None
 
-    # Save metrics to file if requested
     if output_metrics_file:
         try:
             res_df.to_csv(output_metrics_file, index=False)
@@ -225,12 +234,12 @@ def evaluate_experiments(data_files, prev_metrics_file=None, output_metrics_file
 
     summary = add_summary_statistics(res_df)
 
-    # Save final json summary
-    with open("results/smd/evaluation_results.json", "w") as f:
+    os.makedirs("results/smd", exist_ok=True)
+    with open(f"results/smd/evaluation_results_seed{seed}.json", "w") as f:
         json.dump(summary, f, indent=2)
 
     print("\n" + "="*30)
-    print("FINAL RESULTS SMD")
+    print(f"FINAL RESULTS SMD (SEED {seed})")
     print("="*30)
     for k, v in summary.items():
         if isinstance(v, float):
@@ -243,11 +252,11 @@ def evaluate_experiments(data_files, prev_metrics_file=None, output_metrics_file
 # =========================================================
 # WRITE SUMMARY
 # =========================================================
-def write_summary(time_results, eval_results):
+def write_summary(time_results, eval_results, seed=42):
     out = "results/smd/ketqua.txt"
 
     summary_lines = [
-        "================ SUMMARY ================",
+        f"================ SUMMARY (SEED {seed}) ================",
         f"Precision : {eval_results['PRECISION']:.4f}",
         f"Recall    : {eval_results['RECALL']:.4f}",
         f"F1-score  : {eval_results['F1']:.4f}",
@@ -262,12 +271,10 @@ def write_summary(time_results, eval_results):
 
     summary_text = "\n".join(summary_lines)
 
-    # In ra màn hình
     print("\n" + summary_text)
 
-    # Ghi ra file
-    with open(out, "w") as f:
-        f.write(summary_text + "\n")
+    with open(out, "a") as f:
+        f.write(summary_text + "\n\n")
 
     print(f"\nSummary written to {out}")
 
@@ -278,21 +285,22 @@ def main():
     parser = argparse.ArgumentParser(description="Run SMD Experiments")
     parser.add_argument("--phase", type=int, default=0, choices=[0, 1, 2], 
                         help="Phase of execution: 0=All, 1=First Half, 2=Second Half")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed for experiments (default: 42)")
     args = parser.parse_args()
+
+    set_seed(args.seed)
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(BASE_DIR)
 
-    # Define Kaggle input path
     kaggle_input_path = "/kaggle/input/datasets/mgusat/smd-onmiad/ServerMachineDataset"
     writable_dataset_path = os.path.join(BASE_DIR, "datasets", "SMD")
     
-    # Check if Kaggle input exists
     if os.path.exists(kaggle_input_path):
         print(f"Found Kaggle dataset at: {kaggle_input_path}")
         import shutil
         
-        # Function to safely copy directories
         def safe_copy_dir(src_name, dst_name):
             src = os.path.join(kaggle_input_path, src_name)
             dst = os.path.join(writable_dataset_path, dst_name)
@@ -312,22 +320,19 @@ def main():
     else:
         print("Kaggle input path not found. Using local path if available.")
 
-    # Lấy danh sách file dataset trong folder datasets/SMD/train
     train_dir = os.path.join("datasets", "SMD", "train")
     if not os.path.exists(train_dir):
         print(f"Error: Directory {train_dir} does not exist.")
         return
 
-    # Sắp xếp để chạy theo thứ tự
     all_files = sorted([f for f in os.listdir(train_dir) if f.endswith('.txt')])
     
     if not all_files:
         print(f"No .txt files found in {train_dir}")
         return
 
-    print(f"Found total {len(all_files)} datasets in smd.")
+    print(f"Found total {len(all_files)} datasets in SMD.")
 
-    # Split datasets based on phase
     if args.phase == 0:
         data_files = all_files
     else:
@@ -335,40 +340,34 @@ def main():
         if args.phase == 1:
             data_files = all_files[:mid_point]
             print(f"PHASE 1: Running first {len(data_files)} datasets.")
-        else: # phase 2
+        else:
             data_files = all_files[mid_point:]
             print(f"PHASE 2: Running last {len(data_files)} datasets.")
 
-    current_time_stats = run_experiments(data_files, sys.executable, phase=args.phase)
+    current_time_stats = run_experiments(data_files, sys.executable, phase=args.phase, seed=args.seed)
     
-    # Configure evaluation paths
     phase_1_metrics_file = "results/smd/phase_1_metrics_df.csv"
     phase_1_time_file = "results/smd/phase_1_time_stats.json"
     
     if args.phase == 1:
-        # Phase 1: Evaluate current files and save metrics + time stats
         print("\nEvaluating Phase 1 results...")
-        evaluate_experiments(data_files, output_metrics_file=phase_1_metrics_file)
+        evaluate_experiments(data_files, output_metrics_file=phase_1_metrics_file, seed=args.seed)
         
-        # Save time stats
         with open(phase_1_time_file, "w") as f:
             json.dump(current_time_stats, f, indent=2)
             
         print(f"Phase 1 completed. Please push '{phase_1_metrics_file}' and '{phase_1_time_file}' to continue in Phase 2.")
         
     elif args.phase == 2:
-        # Phase 2: Load Phase 1 metrics (if available) and evaluate current files
         print("\nEvaluating Phase 2 results (merging with Phase 1)...")
-        eval_results = evaluate_experiments(data_files, prev_metrics_file=phase_1_metrics_file, output_metrics_file="results/smd/full_metrics.csv") 
+        eval_results = evaluate_experiments(data_files, prev_metrics_file=phase_1_metrics_file, output_metrics_file="results/smd/full_metrics.csv", seed=args.seed) 
         
-        # Merge time stats
         final_time_stats = current_time_stats.copy()
         if os.path.exists(phase_1_time_file):
             try:
                 with open(phase_1_time_file, "r") as f:
                     phase_1_stats = json.load(f)
                     
-                    # Merge logic
                     total_time = phase_1_stats.get("TOTAL_TIME", 0) + current_time_stats.get("TOTAL_TIME", 0)
                     dataset_count = phase_1_stats.get("DATASET_COUNT", 0) + current_time_stats.get("DATASET_COUNT", 0)
                     max_mem = max(phase_1_stats.get("MAX_GPU_MEM_MB", 0), current_time_stats.get("MAX_GPU_MEM_MB", 0))
@@ -386,15 +385,14 @@ def main():
                 print(f"Warning: Could not load Phase 1 time stats: {e}")
         
         if eval_results:
-            write_summary(final_time_stats, eval_results)
+            write_summary(final_time_stats, eval_results, seed=args.seed)
             
-    else: # Phase 0
+    else:
         print("\nVerifying all results for evaluation...")
-        # Evaluate all files directly 
-        eval_results = evaluate_experiments(all_files, output_metrics_file="results/smd/full_metrics.csv")
+        eval_results = evaluate_experiments(all_files, output_metrics_file="results/smd/full_metrics.csv", seed=args.seed)
         
         if eval_results:
-            write_summary(current_time_stats, eval_results)
+            write_summary(current_time_stats, eval_results, seed=args.seed)
 
 if __name__ == "__main__":
     main()
