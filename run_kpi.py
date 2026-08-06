@@ -13,7 +13,7 @@ import argparse
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-def set_seed(seed=42):
+def set_seed(seed=100):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -176,7 +176,7 @@ def prepare_kpi_data(hdf_path, writable_dataset_path):
 # =========================================================
 # RUN EXPERIMENTS
 # =========================================================
-def run_experiments(base_dir, file_list, python_exec, phase=0, seed=42):
+def run_experiments(base_dir, file_list, python_exec, phase=0, seed=100):
     set_seed(seed)
     print("\n" + "="*30)
     print(f"STARTING EXPERIMENTS KPI - PHASE {phase} (SEED {seed})")
@@ -414,8 +414,8 @@ def main():
     parser = argparse.ArgumentParser(description="Run KPI Experiments")
     parser.add_argument("--phase", type=int, default=0, choices=[0, 1, 2], 
                         help="Phase of execution: 0=All, 1=First Half, 2=Second Half")
-    parser.add_argument("--seed", type=int, default=42,
-                        help="Random seed for experiments (default: 42)")
+    parser.add_argument("--seed", type=int, default=100,
+                        help="Random seed for experiments (default: 100)")
     args = parser.parse_args()
 
     set_seed(args.seed)
