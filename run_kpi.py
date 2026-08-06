@@ -169,7 +169,7 @@ def prepare_kpi_data(hdf_path, writable_dataset_path):
               f"test={len(test_df)} rows ({n_anom_test} anomalies)")
 
     file_list = sorted(file_list)
-    print(f"\nPrepared {len(file_list)} KPI CSVs → datasets/kpi/train/ and datasets/kpi/test/")
+    print(f"\nPrepared {len(file_list)} KPI CSVs → datasets/KPI/train/ and datasets/KPI/test/")
     return file_list
 
 
@@ -436,7 +436,7 @@ def main():
         "/KPI-Anomaly-Detection-master/Finals_dataset"
         "/phase2_ground_truth.hdf/phase2_ground_truth.hdf"
     )
-    writable_dataset_path = os.path.join(BASE_DIR, "datasets", "kpi")
+    writable_dataset_path = os.path.join(BASE_DIR, "datasets", "KPI")
 
     # Ensure writable directory exists
     os.makedirs(writable_dataset_path, exist_ok=True)
@@ -451,14 +451,14 @@ def main():
     )
 
     if existing_train_files:
-        print(f"Found {len(existing_train_files)} existing KPI CSVs in datasets/kpi/train/. "
+        print(f"Found {len(existing_train_files)} existing KPI CSVs in datasets/KPI/train/. "
               "Skipping extraction.")
         file_list = sorted(existing_train_files)
     elif os.path.exists(kaggle_hdf_path):
         print(f"Found Kaggle HDF5 at: {kaggle_hdf_path}")
         file_list = prepare_kpi_data(kaggle_hdf_path, writable_dataset_path)
     else:
-        # Fallback: look for local HDF5 in datasets/kpi/
+        # Fallback: look for local HDF5 in datasets/KPI/
         local_hdf = os.path.join(writable_dataset_path, "phase2_ground_truth.hdf")
         if os.path.exists(local_hdf):
             print(f"Using local HDF5 at: {local_hdf}")
@@ -467,7 +467,7 @@ def main():
             print("ERROR: HDF5 file not found at Kaggle path or local fallback.")
             print(f"  Expected Kaggle path : {kaggle_hdf_path}")
             print(f"  Expected local path  : {local_hdf}")
-            print("Please place the HDF5 file in datasets/kpi/ or ensure the Kaggle dataset is attached.")
+            print("Please place the HDF5 file in datasets/KPI/ or ensure the Kaggle dataset is attached.")
             return
 
     if not file_list:
