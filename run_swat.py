@@ -268,7 +268,7 @@ def main():
     # Define the Kaggle input path provided by the user
     kaggle_input_path = "/kaggle/input/datasets/vishala28/swat-dataset-secure-water-treatment-system"
 
-    writable_dataset_path = os.path.join(BASE_DIR, "datasets", "swat")
+    writable_dataset_path = os.path.join(BASE_DIR, "datasets", "SWAT")
 
     # Ensure writable directory exists
     os.makedirs(writable_dataset_path, exist_ok=True)
@@ -348,7 +348,7 @@ def main():
     if not os.path.exists(os.path.join(writable_dataset_path, "normal.csv")) or \
        not os.path.exists(os.path.join(writable_dataset_path, "attack.csv")):
         print(f"Warning: normal.csv or attack.csv not found in {writable_dataset_path}")
-        print("Please ensure 'datasets/swat/normal.csv' and 'datasets/swat/attack.csv' exist.")
+        print("Please ensure 'datasets/SWAT/normal.csv' and 'datasets/SWAT/attack.csv' exist.")
     
     os.environ['swat_DATASET_PATH'] = writable_dataset_path
     print(f"Set swat_DATASET_PATH to {writable_dataset_path}")

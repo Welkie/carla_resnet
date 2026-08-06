@@ -285,7 +285,7 @@ def main():
 
     # Define Kaggle input path
     kaggle_input_path = "/kaggle/input/datasets/mgusat/smd-onmiad/ServerMachineDataset"
-    writable_dataset_path = os.path.join(BASE_DIR, "datasets", "smd")
+    writable_dataset_path = os.path.join(BASE_DIR, "datasets", "SMD")
     
     # Check if Kaggle input exists
     if os.path.exists(kaggle_input_path):
@@ -312,8 +312,8 @@ def main():
     else:
         print("Kaggle input path not found. Using local path if available.")
 
-    # Lấy danh sách file dataset trong folder datasets/smd/train
-    train_dir = os.path.join("datasets", "smd", "train")
+    # Lấy danh sách file dataset trong folder datasets/SMD/train
+    train_dir = os.path.join("datasets", "SMD", "train")
     if not os.path.exists(train_dir):
         print(f"Error: Directory {train_dir} does not exist.")
         return

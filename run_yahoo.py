@@ -250,7 +250,7 @@ def main():
     #            Columns: timestamp, value, is_anomaly
     # ===========================================================
     kaggle_input_path = "/kaggle/input/datasets/saostken/yahoo-a1/yahoo_A1"
-    writable_dataset_path = os.path.join(BASE_DIR, "datasets", "yahoo")
+    writable_dataset_path = os.path.join(BASE_DIR, "datasets", "YAHOO")
 
     # Ensure writable dataset directory exists
     os.makedirs(writable_dataset_path, exist_ok=True)
