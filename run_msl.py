@@ -258,7 +258,7 @@ def main():
 
     # Define Kaggle input path
     kaggle_input_path = "/kaggle/input/datasets/patrickfleith/nasa-anomaly-detection-dataset-smap-msl"
-    writable_dataset_path = os.path.join(BASE_DIR, "datasets", "msl")
+    writable_dataset_path = os.path.join(BASE_DIR, "datasets", "MSL")
 
     # Ensure writable directory exists
     os.makedirs(writable_dataset_path, exist_ok=True)
@@ -294,7 +294,7 @@ def main():
     else:
         print("Kaggle input path not found. Using local path if available.")
 
-    csv_path = "datasets/msl/labeled_anomalies.csv"
+    csv_path = "datasets/MSL/labeled_anomalies.csv"
     data_info = pd.read_csv(csv_path)
     data_info = data_info[data_info["spacecraft"] == "MSL"]
 
