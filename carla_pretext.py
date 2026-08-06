@@ -101,7 +101,7 @@ def main():
             #                                  split='train') # Dataset w/o augs for knn eval
 
     elif p['train_db_name'] == 'yahoo':
-        filename = os.path.join('/home/zahraz/hz18_scratch/zahraz/datasets/', 'Yahoo/', p['fname'])
+        filename = os.path.join(MyPath.db_root_dir('yahoo'), p['fname'])
         dataset = []
 
         print(filename)
