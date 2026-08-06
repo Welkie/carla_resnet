@@ -33,11 +33,14 @@ FLAGS = argparse.ArgumentParser(description='classification Loss')
 FLAGS.add_argument('--config_env', help='Location of path config file')
 FLAGS.add_argument('--config_exp', help='Location of experiments config file')
 FLAGS.add_argument('--fname', help='Config the file name of Dataset')
+FLAGS.add_argument('--wsz', type=int, default=200, help='Config window size of Dataset')
 
 def main():
     global best_f1
     args = FLAGS.parse_args()
     p = create_config(args.config_env, args.config_exp, args.fname)
+    if hasattr(args, 'wsz') and args.wsz:
+        p['wsz'] = args.wsz
     print(colored('CARLA Self-supervised Classification stage --> ', 'yellow'))
 
     # CUDNN

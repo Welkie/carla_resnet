@@ -23,7 +23,7 @@ class Yahoo(Dataset):
     """
     base_folder = ''
 
-    def __init__(self, fname, root=MyPath.db_root_dir('yahoo'), train=True, transform=None, sanomaly= None, mean_data=None, std_data=None, data=None, label=None):
+    def __init__(self, fname, root=MyPath.db_root_dir('yahoo'), train=True, transform=None, sanomaly= None, mean_data=None, std_data=None, data=None, label=None, wsz=200):
 
         super(Yahoo, self).__init__()
         self.root = root
@@ -42,7 +42,7 @@ class Yahoo(Dataset):
 
         self.data = np.asarray(data)[:, np.newaxis]
         self.targets = np.asarray(label)
-        wsz, stride = 512, 1
+        stride = 1
 
         self.data, self.targets = self.convert_to_windows(wsz, stride)
 

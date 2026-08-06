@@ -3,12 +3,28 @@ import sys
 import time
 import json
 import subprocess
+import shutil
+import random
 import torch
 import numpy as np
 import pandas as pd
 from sklearn.metrics import average_precision_score, confusion_matrix, precision_recall_curve
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+# =========================================================
+# SEED SETTING
+# =========================================================
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ["PYTHONHASHSEED"] = str(seed)
 
 # =========================================================
 # PAPER-STYLE SUMMARY
@@ -42,9 +58,10 @@ def add_summary_statistics(res_df):
 # =========================================================
 # RUN EXPERIMENTS
 # =========================================================
-def run_experiments(base_dir, file_list, python_exec):
+def run_experiments(base_dir, file_list, python_exec, seed=42, wsz=200):
+    set_seed(seed)
     print("\n" + "="*30)
-    print("STARTING EXPERIMENTS — Yahoo-A1")
+    print(f"STARTING EXPERIMENTS — Yahoo-A1 (SEED {seed}, WSZ {wsz})")
     print("="*30)
 
     execution_times = []
@@ -59,16 +76,14 @@ def run_experiments(base_dir, file_list, python_exec):
         print("No GPU available, memory tracking disabled")
 
     for fname in file_list:
-        print(f"\nRunning dataset: {fname}")
+        print(f"\nRunning dataset: {fname} (Seed {seed}, WSZ {wsz})")
         start = time.time()
 
         # Run pretext
         try:
             result_pretext = subprocess.run([
-                python_exec, "carla_pretext.py",
-                "--config_env", "configs/env.yml",
-                "--config_exp", "configs/pretext/carla_pretext_yahoo.yml",
-                "--fname", fname
+                python_exec, "-c",
+                f"import sys, torch; sys.argv=['carla_pretext.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/pretext/carla_pretext_yahoo.yml', '--fname', '{fname}', '--wsz', '{wsz}']; import carla_pretext; carla_pretext.set_seed({seed}); carla_pretext.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
 
             # Parse GPU memory from pretext output
@@ -85,10 +100,8 @@ def run_experiments(base_dir, file_list, python_exec):
         # Run classification
         try:
             result_classification = subprocess.run([
-                python_exec, "carla_classification.py",
-                "--config_env", "configs/env.yml",
-                "--config_exp", "configs/classification/carla_classification_yahoo.yml",
-                "--fname", fname
+                python_exec, "-c",
+                f"import sys, torch; sys.argv=['carla_classification.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/classification/carla_classification_yahoo.yml', '--fname', '{fname}', '--wsz', '{wsz}']; import carla_classification; carla_classification.set_seed({seed}); carla_classification.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
 
             # Parse GPU memory from classification output
@@ -115,7 +128,7 @@ def run_experiments(base_dir, file_list, python_exec):
     avg_time = total_time / len(execution_times) if execution_times else 0
 
     print("\n" + "="*30)
-    print("DONE ALL YAHOO-A1 DATASETS")
+    print(f"DONE ALL YAHOO-A1 DATASETS (SEED {seed}, WSZ {wsz})")
     print(f"Total time: {total_time:.2f} s")
     print(f"Avg / dataset: {avg_time:.2f} s")
     print("="*30)
@@ -125,20 +138,21 @@ def run_experiments(base_dir, file_list, python_exec):
     time_results = {
         "TOTAL_TIME": total_time,
         "AVG_TIME": avg_time,
-        "MAX_GPU_MEM_MB": max_gpu_mem_mb
+        "MAX_GPU_MEM_MB": max_gpu_mem_mb,
+        "SEED": seed,
+        "WSZ": wsz
     }
-    with open("results/yahoo/time_results.json", "w") as f:
+    with open(f"results/yahoo/time_results_seed{seed}_wsz{wsz}.json", "w") as f:
         json.dump(time_results, f, indent=2)
 
-    print(f"\nTime results saved to results/yahoo/time_results.json")
     return time_results
 
 # =========================================================
 # EVALUATION (PAPER-STYLE)
 # =========================================================
-def evaluate_experiments(file_list):
+def evaluate_experiments(file_list, seed=42, wsz=200):
     print("\n" + "="*30)
-    print("STARTING EVALUATION (PAPER STYLE)")
+    print(f"STARTING EVALUATION (PAPER STYLE - SEED {seed}, WSZ {wsz})")
     print("="*30)
 
     res_df = pd.DataFrame(columns=[
@@ -191,11 +205,11 @@ def evaluate_experiments(file_list):
 
     summary = add_summary_statistics(res_df)
 
-    with open("results/yahoo/evaluation_results.json", "w") as f:
+    with open(f"results/yahoo/evaluation_results_seed{seed}_wsz{wsz}.json", "w") as f:
         json.dump(summary, f, indent=2)
 
     print("\n" + "="*30)
-    print("FINAL RESULTS (PAPER STYLE)")
+    print(f"FINAL RESULTS (PAPER STYLE - SEED {seed}, WSZ {wsz})")
     print("="*30)
     for k, v in summary.items():
         if isinstance(v, float):
@@ -208,11 +222,11 @@ def evaluate_experiments(file_list):
 # =========================================================
 # WRITE SUMMARY
 # =========================================================
-def write_summary(time_results, eval_results):
+def write_summary(time_results, eval_results, seed=42, wsz=200):
     out = "results/yahoo/ketqua.txt"
 
     summary_lines = [
-        "================ SUMMARY ================",
+        f"================ SUMMARY (SEED {seed}, WSZ {wsz}) ================",
         f"Precision : {eval_results['PRECISION']:.4f}",
         f"Recall    : {eval_results['RECALL']:.4f}",
         f"F1-score  : {eval_results['F1']:.4f}",
@@ -230,9 +244,9 @@ def write_summary(time_results, eval_results):
     # Print to stdout
     print("\n" + summary_text)
 
-    # Write to file
-    with open(out, "w") as f:
-        f.write(summary_text + "\n")
+    # Append to ketqua.txt
+    with open(out, "a") as f:
+        f.write(summary_text + "\n\n")
 
     print(f"\nSummary written to {out}")
 
@@ -243,12 +257,7 @@ def main():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(BASE_DIR)
 
-    # ===========================================================
     # Kaggle input path for Yahoo-A1 dataset
-    # Dataset: /kaggle/input/datasets/saostken/yahoo-a1/yahoo_A1
-    # Structure: 67 CSV files — real_1.csv ... real_67.csv
-    #            Columns: timestamp, value, is_anomaly
-    # ===========================================================
     kaggle_input_path = "/kaggle/input/datasets/saostken/yahoo-a1/yahoo_A1"
     writable_dataset_path = os.path.join(BASE_DIR, "datasets", "YAHOO")
 
@@ -258,7 +267,6 @@ def main():
     # Copy CSVs from Kaggle read-only input to writable working dir
     if os.path.exists(kaggle_input_path):
         print(f"Found Kaggle dataset at: {kaggle_input_path}")
-        import shutil
 
         for i in range(1, 68):
             src = os.path.join(kaggle_input_path, f"real_{i}.csv")
@@ -289,11 +297,30 @@ def main():
 
     print(f"\nFound {len(file_list)} Yahoo-A1 files: {file_list[0]} ... {file_list[-1]}")
 
-    time_results = run_experiments(BASE_DIR, file_list, sys.executable)
-    eval_results = evaluate_experiments(file_list)
+    # Clear previous ketqua.txt file if it exists
+    out_txt = "results/yahoo/ketqua.txt"
+    if os.path.exists(out_txt):
+        os.remove(out_txt)
 
-    if time_results and eval_results:
-        write_summary(time_results, eval_results)
+    runs = [
+        {"seed": 4,   "wsz": 200},
+        {"seed": 42,  "wsz": 200},
+        {"seed": 100, "wsz": 200},
+        {"seed": 4,   "wsz": 400},
+    ]
+
+    for idx, run_cfg in enumerate(runs, 1):
+        s = run_cfg["seed"]
+        w = run_cfg["wsz"]
+        print("\n" + "="*50)
+        print(f"Lần {idx}: seed {s}, wsz={w}")
+        print("="*50)
+
+        time_results = run_experiments(BASE_DIR, file_list, sys.executable, seed=s, wsz=w)
+        eval_results = evaluate_experiments(file_list, seed=s, wsz=w)
+
+        if time_results and eval_results:
+            write_summary(time_results, eval_results, seed=s, wsz=w)
 
 if __name__ == "__main__":
     main()

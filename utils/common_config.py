@@ -97,8 +97,9 @@ def get_train_dataset(p, transform, sanomaly, to_augmented_dataset=False,
 
     elif p['train_db_name'] == 'yahoo':
         from data.Yahoo import Yahoo
+        wsz = p.get('wsz', 200)
         dataset = Yahoo(p['fname'], train=True, transform=transform, sanomaly=sanomaly,
-                        data=data, label=label)
+                        data=data, label=label, wsz=wsz)
         mean, std = dataset.get_info()
 
     elif p['train_db_name'] == 'kpi':
@@ -197,8 +198,9 @@ def get_val_dataset(p, transform=None, sanomaly=None, to_neighbors_dataset=False
 
     elif p['train_db_name'] == 'yahoo':
         from data.Yahoo import Yahoo
+        wsz = p.get('wsz', 200)
         dataset = Yahoo(p['fname'], train=False, transform=transform, sanomaly=sanomaly,
-                        mean_data=mean_data, std_data=std_data, data=data, label=label)
+                        mean_data=mean_data, std_data=std_data, data=data, label=label, wsz=wsz)
 
     elif p['train_db_name'] == 'kpi':
         from data.KPI import KPI

@@ -39,6 +39,8 @@ parser.add_argument('--config_exp',
                     help='Config file for the experiment')
 parser.add_argument('--fname',
                     help='Config the file name of Dataset')
+parser.add_argument('--wsz', type=int, default=200,
+                    help='Config window size of Dataset')
 args = parser.parse_args()
 
 def main():
@@ -48,6 +50,8 @@ def main():
 
     print(colored('CARLA Pretext stage --> ', 'yellow'))
     p = create_config(args.config_env, args.config_exp, args.fname)
+    if hasattr(args, 'wsz') and args.wsz:
+        p['wsz'] = args.wsz
 
     model = get_model(p)
     best_model = None
