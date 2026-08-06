@@ -58,15 +58,16 @@ def get_predictions(p, dataloader, model, return_features=False, is_training=Fal
     ptr = 0
     for batch in dataloader:
         ts = batch[key_]
-        #ts = torch.unsqueeze(ts, dim=1)
+        if torch.is_tensor(ts):
+            ts = ts.to(device)
         if ts.ndim == 3:
             bs, w, h = ts.shape
         else:
             bs, w = ts.shape
-            h =1
+            h = 1
 
         if isinstance(ts, np.ndarray):
-            ts = torch.from_numpy(ts).float()
+            ts = torch.from_numpy(ts).float().to(device)
             targets.append(torch.from_numpy(batch['target']))
         else:
             targets.append(batch['target'])

@@ -71,11 +71,11 @@ class TSRepository(object):
             return k_furthest_neighbours, k_nearest_neighbours
 
     def furthest_nearest_neighbors(self, topk):
-        features = self.features
+        features = self.features[:self.ptr] if self.ptr > 0 else self.features
 
         d = features.shape[1]
         index = faiss.IndexFlatL2(d)
-        index.add(features.cpu().numpy())  # CUDA
+        index.add(features.cpu().numpy())
 
         xq = np.random.random(d)
         _, ids = index.search(xq.reshape(1, -1).astype(np.float32), len(features))
@@ -96,7 +96,15 @@ class TSRepository(object):
     def update(self, features, targets):
         b = features.size(0)
         
-        assert(b + self.ptr <= self.n)
+        if self.ptr + b > self.n:
+            new_n = max(self.n * 2, self.ptr + b)
+            new_features = torch.FloatTensor(new_n, self.dim)
+            new_features[:self.ptr].copy_(self.features[:self.ptr])
+            self.features = new_features
+            new_targets = torch.LongTensor(new_n)
+            new_targets[:self.ptr].copy_(self.targets[:self.ptr])
+            self.targets = new_targets
+            self.n = new_n
         
         self.features[self.ptr:self.ptr+b].copy_(features.detach())
         if not torch.is_tensor(targets): targets = torch.from_numpy(targets)
