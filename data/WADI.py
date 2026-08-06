@@ -17,7 +17,7 @@ class WADI(Dataset):
     base_folder = ''
 
     def __init__(self, fname, root=MyPath.db_root_dir('wadi'), train=True,
-                 transform=None, sanomaly=None, mean_data=None, std_data=None):
+                 transform=None, sanomaly=None, mean_data=None, std_data=None, wsz=400):
 
         super(WADI, self).__init__()
 
@@ -33,7 +33,7 @@ class WADI(Dataset):
 
         self.data = []
         self.targets = []
-        wsz, stride = 400, 200
+        stride = wsz // 2
 
         if self.train:
             # ------------------------------------------------------------------

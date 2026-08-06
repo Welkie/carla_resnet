@@ -64,10 +64,10 @@ def add_summary_statistics(res_df):
 # =========================================================
 # RUN EXPERIMENTS
 # =========================================================
-def run_experiments(base_dir, datasets, python_exec, seed=42):
+def run_experiments(base_dir, datasets, python_exec, seed=42, wsz=200):
     set_seed(seed)
     print("\n" + "="*30)
-    print(f"STARTING EXPERIMENTS WADI (SEED {seed})")
+    print(f"STARTING EXPERIMENTS WADI (SEED {seed}, WSZ {wsz})")
     print("="*30)
 
     execution_times = []
@@ -81,14 +81,14 @@ def run_experiments(base_dir, datasets, python_exec, seed=42):
         print("No GPU available, memory tracking disabled")
 
     for fname in datasets:
-        print(f"\nRunning dataset: {fname} (Seed {seed})")
+        print(f"\nRunning dataset: {fname} (Seed {seed}, WSZ {wsz})")
         start = time.time()
 
         # -- Pretext --
         try:
             result_pretext = subprocess.run([
                 python_exec, "-c",
-                f"import sys, torch; sys.argv=['carla_pretext.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/pretext/carla_pretext_wadi.yml', '--fname', '{fname}']; import carla_pretext; carla_pretext.set_seed({seed}); carla_pretext.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
+                f"import sys, torch; sys.argv=['carla_pretext.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/pretext/carla_pretext_wadi.yml', '--fname', '{fname}', '--wsz', '{wsz}']; import carla_pretext; carla_pretext.set_seed({seed}); carla_pretext.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
 
             for line in result_pretext.stdout.split('\n'):
@@ -104,7 +104,7 @@ def run_experiments(base_dir, datasets, python_exec, seed=42):
         try:
             result_classification = subprocess.run([
                 python_exec, "-c",
-                f"import sys, torch; sys.argv=['carla_classification.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/classification/carla_classification_wadi.yml', '--fname', '{fname}']; import carla_classification; carla_classification.set_seed({seed}); carla_classification.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
+                f"import sys, torch; sys.argv=['carla_classification.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/classification/carla_classification_wadi.yml', '--fname', '{fname}', '--wsz', '{wsz}']; import carla_classification; carla_classification.set_seed({seed}); carla_classification.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
 
             for line in result_classification.stdout.split('\n'):
@@ -128,7 +128,7 @@ def run_experiments(base_dir, datasets, python_exec, seed=42):
     avg_time   = total_time / len(execution_times) if execution_times else 0
 
     print("\n" + "="*30)
-    print(f"DONE ALL WADI DATASETS (SEED {seed})")
+    print(f"DONE ALL WADI DATASETS (SEED {seed}, WSZ {wsz})")
     print(f"Total time: {total_time:.2f} s")
     print(f"Avg / dataset: {avg_time:.2f} s")
     print("="*30)
@@ -138,9 +138,10 @@ def run_experiments(base_dir, datasets, python_exec, seed=42):
         "TOTAL_TIME":     total_time,
         "AVG_TIME":       avg_time,
         "MAX_GPU_MEM_MB": max_gpu_mem_mb,
-        "SEED": seed
+        "SEED": seed,
+        "WSZ": wsz
     }
-    with open(f"results/wadi/time_results_seed{seed}.json", "w") as f:
+    with open(f"results/wadi/time_results_seed{seed}_wsz{wsz}.json", "w") as f:
         json.dump(time_results, f, indent=2)
 
     return time_results
@@ -148,9 +149,9 @@ def run_experiments(base_dir, datasets, python_exec, seed=42):
 # =========================================================
 # EVALUATION (PAPER-STYLE)
 # =========================================================
-def evaluate_experiments(datasets, seed=42):
+def evaluate_experiments(datasets, seed=42, wsz=200):
     print("\n" + "="*30)
-    print(f"STARTING EVALUATION (PAPER STYLE - SEED {seed})")
+    print(f"STARTING EVALUATION (PAPER STYLE - SEED {seed}, WSZ {wsz})")
     print("="*30)
 
     res_df = pd.DataFrame(columns=[
@@ -204,11 +205,11 @@ def evaluate_experiments(datasets, seed=42):
 
     summary = add_summary_statistics(res_df)
 
-    with open(f"results/wadi/evaluation_results_seed{seed}.json", "w") as f:
+    with open(f"results/wadi/evaluation_results_seed{seed}_wsz{wsz}.json", "w") as f:
         json.dump(summary, f, indent=2)
 
     print("\n" + "="*30)
-    print(f"FINAL RESULTS (PAPER STYLE - SEED {seed})")
+    print(f"FINAL RESULTS (PAPER STYLE - SEED {seed}, WSZ {wsz})")
     print("="*30)
     for k, v in summary.items():
         print(f"{k}: {v:.4f}" if isinstance(v, float) else f"{k}: {v}")
@@ -218,11 +219,11 @@ def evaluate_experiments(datasets, seed=42):
 # =========================================================
 # WRITE SUMMARY
 # =========================================================
-def write_summary(time_results, eval_results, seed=42):
+def write_summary(time_results, eval_results, seed=42, wsz=200):
     out = "results/wadi/ketqua.txt"
 
     summary_lines = [
-        f"================ SUMMARY (SEED {seed}) ================",
+        f"================ SUMMARY (SEED {seed}, WSZ {wsz}) ================",
         f"Precision : {eval_results['PRECISION']:.4f}",
         f"Recall    : {eval_results['RECALL']:.4f}",
         f"F1-score  : {eval_results['F1']:.4f}",
@@ -300,18 +301,25 @@ def main():
     if os.path.exists(out_txt):
         os.remove(out_txt)
 
-    seeds = [42, 100]
-    for seed in seeds:
+    runs = [
+        {"seed": 42,  "wsz": 200},
+        {"seed": 100, "wsz": 200},
+        {"seed": 4,   "wsz": 200},
+        {"seed": 4,   "wsz": 300},
+    ]
+
+    for idx, run_cfg in enumerate(runs, 1):
+        s = run_cfg["seed"]
+        w = run_cfg["wsz"]
         print("\n" + "="*50)
-        print(f"seed {seed}:")
+        print(f"Lần {idx}: seed {s}, wsz={w}")
         print("="*50)
 
-        time_results = run_experiments(BASE_DIR, datasets, sys.executable, seed=seed)
-        eval_results = evaluate_experiments(datasets, seed=seed)
+        time_results = run_experiments(BASE_DIR, datasets, sys.executable, seed=s, wsz=w)
+        eval_results = evaluate_experiments(datasets, seed=s, wsz=w)
 
         if time_results and eval_results:
-            write_summary(time_results, eval_results, seed=seed)
-
+            write_summary(time_results, eval_results, seed=s, wsz=w)
 
 if __name__ == "__main__":
     main()
