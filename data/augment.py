@@ -61,8 +61,8 @@ class SubAnomaly(object):
 
         # Set the scale_factor if not provided
         if scale_factor is None:
-            scale_factor = np.random.uniform(0.1, 2.0, window.shape[1])
-            print('test')
+            num_feat = window.shape[1] if window.ndim > 1 else 1
+            scale_factor = np.random.uniform(0.1, 2.0, num_feat)
 
         # Randomly select the start index for the subsequence
         if start_index is None:
@@ -187,9 +187,14 @@ class SubAnomaly(object):
         start_index = np.random.randint(0, len(window) - subsequence_length)
         if (window.ndim > 1):
             num_features = window.shape[1]
-            num_dims = np.random.randint(int(num_features/10), int(num_features/2)) #(int(num_features/5), int(num_features/2))
+            if num_features <= 2:
+                num_dims = 1
+            else:
+                low_dim = max(1, int(num_features / 10))
+                high_dim = max(low_dim + 1, int(num_features / 2))
+                num_dims = np.random.randint(low_dim, high_dim)
             for k in range(num_dims):
-                i = np.random.randint(0, num_features)
+                i = np.random.randint(0, num_features) if num_features > 1 else 0
                 temp_win = window[:, i] # Keep as 1D
                 anomaly_seasonal[:, i] = self.inject_frequency_anomaly(temp_win,
                                                               scale_factor=1,
