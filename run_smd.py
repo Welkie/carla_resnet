@@ -285,8 +285,8 @@ def main():
     parser = argparse.ArgumentParser(description="Run SMD Experiments")
     parser.add_argument("--phase", type=int, default=0, choices=[0, 1, 2], 
                         help="Phase of execution: 0=All, 1=First Half, 2=Second Half")
-    parser.add_argument("--seed", type=int, default=42,
-                        help="Random seed for experiments (default: 42)")
+    parser.add_argument("--seed", type=int, default=100,
+                        help="Random seed for experiments (default: 100)")
     args = parser.parse_args()
 
     set_seed(args.seed)
