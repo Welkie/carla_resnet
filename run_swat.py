@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import json
+import random
 import subprocess
 import torch
 import numpy as np
@@ -16,6 +17,20 @@ try:
     import kagglehub
 except ImportError:
     kagglehub = None
+
+# =========================================================
+# SEED SETTING
+# =========================================================
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ["PYTHONHASHSEED"] = str(seed)
 
 # =========================================================
 # PAPER-STYLE SUMMARY
@@ -49,9 +64,10 @@ def add_summary_statistics(res_df):
 # =========================================================
 # RUN EXPERIMENTS
 # =========================================================
-def run_experiments(base_dir, datasets, python_exec):
+def run_experiments(base_dir, datasets, python_exec, seed=42):
+    set_seed(seed)
     print("\n" + "="*30)
-    print("STARTING EXPERIMENTS")
+    print(f"STARTING EXPERIMENTS SWAT (SEED {seed})")
     print("="*30)
     
     execution_times = []
@@ -66,16 +82,14 @@ def run_experiments(base_dir, datasets, python_exec):
         print("No GPU available, memory tracking disabled")
 
     for fname in datasets:
-        print(f"\nRunning dataset: {fname}")
+        print(f"\nRunning dataset: {fname} (Seed {seed})")
         start = time.time()
 
         # Run pretext
         try:
             result_pretext = subprocess.run([
-                python_exec, "carla_pretext.py",
-                "--config_env", "configs/env.yml",
-                "--config_exp", "configs/pretext/carla_pretext_swat.yml",
-                "--fname", fname
+                python_exec, "-c",
+                f"import sys, torch; sys.argv=['carla_pretext.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/pretext/carla_pretext_swat.yml', '--fname', '{fname}']; import carla_pretext; carla_pretext.set_seed({seed}); carla_pretext.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
             
             # Parse GPU memory from pretext
@@ -92,10 +106,8 @@ def run_experiments(base_dir, datasets, python_exec):
         # Run classification
         try:
             result_classification = subprocess.run([
-                python_exec, "carla_classification.py",
-                "--config_env", "configs/env.yml",
-                "--config_exp", "configs/classification/carla_classification_swat.yml",
-                "--fname", fname
+                python_exec, "-c",
+                f"import sys, torch; sys.argv=['carla_classification.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/classification/carla_classification_swat.yml', '--fname', '{fname}']; import carla_classification; carla_classification.set_seed({seed}); carla_classification.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
 
             # Parse GPU memory from classification
@@ -122,7 +134,7 @@ def run_experiments(base_dir, datasets, python_exec):
     avg_time = total_time / len(execution_times) if execution_times else 0
 
     print("\n" + "="*30)
-    print("DONE ALL SWAT DATASETS")
+    print(f"DONE ALL SWAT DATASETS (SEED {seed})")
     print(f"Total time: {total_time:.2f} s")
     print(f"Avg / dataset: {avg_time:.2f} s")
     print("="*30)
@@ -132,20 +144,21 @@ def run_experiments(base_dir, datasets, python_exec):
     time_results = {
         "TOTAL_TIME": total_time,
         "AVG_TIME": avg_time,
-        "MAX_GPU_MEM_MB": max_gpu_mem_mb
+        "MAX_GPU_MEM_MB": max_gpu_mem_mb,
+        "SEED": seed
     }
-    with open("results/swat/time_results.json", "w") as f:
+    with open(f"results/swat/time_results_seed_{seed}.json", "w") as f:
         json.dump(time_results, f, indent=2)
     
-    print(f"\nTime results saved to results/swat/time_results.json")
+    print(f"\nTime results saved to results/swat/time_results_seed_{seed}.json")
     return time_results
 
 # =========================================================
 # EVALUATION (PAPER-STYLE)
 # =========================================================
-def evaluate_experiments(datasets):
+def evaluate_experiments(datasets, seed=42):
     print("\n" + "="*30)
-    print("STARTING EVALUATION (PAPER STYLE)")
+    print(f"STARTING EVALUATION (PAPER STYLE - SEED {seed})")
     print("="*30)
 
     res_df = pd.DataFrame(columns=[
@@ -183,14 +196,12 @@ def evaluate_experiments(datasets):
             pred = scores >= thr
             cm = confusion_matrix(df_test["Class"], pred)
             if cm.size == 1:
-                # If only one class is predicted (e.g., all 0 or all 1)
-                # Determine which case it is based on the actual values
-                if df_test["Class"].iloc[0] == 0: # All true negatives (or false positives if pred=1)
-                     tn, fp, fn, tp = cm[0,0], 0, 0, 0 # assumption if pred=0
-                     if pred.iloc[0]: # If predicted 1
+                if df_test["Class"].iloc[0] == 0:
+                     tn, fp, fn, tp = cm[0,0], 0, 0, 0
+                     if pred.iloc[0]:
                          tn, fp, fn, tp = 0, cm[0,0], 0, 0
-                else: # All true positives (or false negatives)
-                     tn, fp, fn, tp = 0, 0, cm[0,0], 0 # assumption if pred=0
+                else:
+                     tn, fp, fn, tp = 0, 0, cm[0,0], 0
                      if pred.iloc[0]: 
                          tn, fp, fn, tp = 0, 0, 0, cm[0,0]
             else:
@@ -211,11 +222,11 @@ def evaluate_experiments(datasets):
 
     summary = add_summary_statistics(res_df)
 
-    with open("results/swat/evaluation_results.json", "w") as f:
+    with open(f"results/swat/evaluation_results_seed_{seed}.json", "w") as f:
         json.dump(summary, f, indent=2)
 
     print("\n" + "="*30)
-    print("FINAL RESULTS (PAPER STYLE)")
+    print(f"FINAL RESULTS (PAPER STYLE - SEED {seed})")
     print("="*30)
     for k, v in summary.items():
         if isinstance(v, float):
@@ -228,11 +239,11 @@ def evaluate_experiments(datasets):
 # =========================================================
 # WRITE SUMMARY
 # =========================================================
-def write_summary(time_results, eval_results):
+def write_summary(time_results, eval_results, seed=42):
     out = "results/swat/ketqua.txt"
 
     summary_lines = [
-        "================ SUMMARY ================",
+        f"================ SUMMARY (SEED {seed}) ================",
         f"Precision : {eval_results['PRECISION']:.4f}",
         f"Recall    : {eval_results['RECALL']:.4f}",
         f"F1-score  : {eval_results['F1']:.4f}",
@@ -247,12 +258,10 @@ def write_summary(time_results, eval_results):
 
     summary_text = "\n".join(summary_lines)
 
-    # In ra màn hình
     print("\n" + summary_text)
 
-    # Ghi ra file
-    with open(out, "w") as f:
-        f.write(summary_text + "\n")
+    with open(out, "a") as f:
+        f.write(summary_text + "\n\n")
 
     print(f"\nSummary written to {out}")
 
@@ -265,24 +274,18 @@ def main():
 
     datasets = ["swat"]
 
-    # Define the Kaggle input path provided by the user
     kaggle_input_path = "/kaggle/input/datasets/vishala28/swat-dataset-secure-water-treatment-system"
-
     writable_dataset_path = os.path.join(BASE_DIR, "datasets", "SWAT")
 
-    # Ensure writable directory exists
     os.makedirs(writable_dataset_path, exist_ok=True)
 
-    # Check if the Kaggle input path exists - Restore compatibility for Kaggle
     if os.path.exists(kaggle_input_path):
         print(f"Found Kaggle dataset at: {kaggle_input_path}")
         
-        # files to look for
         files = os.listdir(kaggle_input_path)
         normal_file = None
         attack_file = None
 
-        # Look for merged.csv first as requested by user
         merged_file = None
         if 'merged.csv' in files:
             merged_file = 'merged.csv'
@@ -295,14 +298,10 @@ def main():
         if merged_file:
              src = os.path.join(kaggle_input_path, merged_file)
              print(f"Found merged dataset: {src}")
-             # Process merged dataset (split into normal.csv and attack.csv)
-             # We do this regardless if they exist to ensure fresh split from merged
              process_merged_dataset(src, writable_dataset_path)
         else:
-             # Fallback to looking for separate normal and attack files
              print("merged.csv not found. Looking for separate files...")
              
-             # Heuristic to find files
              if 'normal.csv' in files:
                  normal_file = 'normal.csv'
              else:
@@ -319,7 +318,6 @@ def main():
                          attack_file = f
                          break
              
-             # Copy to writable path with correct names if they don't exist
              if normal_file:
                  src = os.path.join(kaggle_input_path, normal_file)
                  dst = os.path.join(writable_dataset_path, "normal.csv")
@@ -341,10 +339,8 @@ def main():
         os.environ['swat_DATASET_PATH'] = writable_dataset_path
         print(f"Set swat_DATASET_PATH to {writable_dataset_path}")
     else:
-        # Local environment fallback
         print("Kaggle input path not found. using local path if available.")
         
-    # Check if files exist (Common check)
     if not os.path.exists(os.path.join(writable_dataset_path, "normal.csv")) or \
        not os.path.exists(os.path.join(writable_dataset_path, "attack.csv")):
         print(f"Warning: normal.csv or attack.csv not found in {writable_dataset_path}")
@@ -353,36 +349,32 @@ def main():
     os.environ['swat_DATASET_PATH'] = writable_dataset_path
     print(f"Set swat_DATASET_PATH to {writable_dataset_path}")
 
+    # Clear previous ketqua.txt file if it exists
+    out_txt = "results/swat/ketqua.txt"
+    if os.path.exists(out_txt):
+        os.remove(out_txt)
 
-    time_results = run_experiments(BASE_DIR, datasets, sys.executable)
-    eval_results = evaluate_experiments(datasets)
+    seeds = [42, 100]
+    for seed in seeds:
+        print("\n" + "="*50)
+        print(f"seed {seed}:")
+        print("="*50)
 
-    if time_results and eval_results:
-        write_summary(time_results, eval_results)
+        time_results = run_experiments(BASE_DIR, datasets, sys.executable, seed=seed)
+        eval_results = evaluate_experiments(datasets, seed=seed)
+
+        if time_results and eval_results:
+            write_summary(time_results, eval_results, seed=seed)
 
 def process_merged_dataset(merged_path, output_dir):
-    """
-    Splits the merged.csv into normal.csv (Train) and attack.csv (Test).
-    Standard SWAT split: 
-    - Train (Normal): First ~7 days. 
-    - Test (Attack): Remaining ~4 days (contains both Normal and Attack).
-    
-    Standard row counts (approx):
-    - Train: 496800
-    - Test: 449919
-    """
     print(f"Processing merged dataset from {merged_path}...")
     try:
         df = pd.read_csv(merged_path)
-        # Strip whitespace from columns
         df.columns = df.columns.str.strip()
         
-        # Split dung: train = 496800 đầu, test = 449919 cuối
-        # Bo qua phan o giua (449919 rows normal thừa)
         train_df = df.iloc[:496800].copy()
         test_df  = df.iloc[-449919:].copy()
         
-        # Save to destination
         train_path = os.path.join(output_dir, "normal.csv")
         test_path = os.path.join(output_dir, "attack.csv")
         

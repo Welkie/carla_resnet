@@ -132,9 +132,9 @@ class SWAT(Dataset):
         Returns:
             dict: {'ts': ts, 'target': index of target class, 'meta': dict}
         """
-        ts_org = torch.from_numpy(self.data[index]).float() # cuda
+        ts_org = torch.from_numpy(self.data[index]).float().to(device)
         if len(self.targets) > 0:
-            target = torch.tensor(self.targets[index].astype(int), dtype=torch.long)
+            target = torch.tensor(self.targets[index].astype(int), dtype=torch.long).to(device)
             class_name = self.classes[target]
         else:
             target = 0
