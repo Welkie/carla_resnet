@@ -27,7 +27,7 @@ class SMD(Dataset):
         self.data = []
         self.targets = []
         labels = []
-        wsz, stride = 512, 5
+        wsz, stride = 200, 5
 
         if self.train:
             self.base_folder += 'train'
