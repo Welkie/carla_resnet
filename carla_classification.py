@@ -127,8 +127,17 @@ def main():
 
     # Model
     model = get_model(p, p['pretext_model'])
-    model = torch.nn.DataParallel(model)
     model = model.to(device)
+
+    # Helper for DataParallel-safe state_dict access
+    def get_state_dict(m):
+        return m.module.state_dict() if isinstance(m, torch.nn.DataParallel) else m.state_dict()
+
+    def load_model_state_dict(m, state_dict):
+        if isinstance(m, torch.nn.DataParallel):
+            m.module.load_state_dict(state_dict)
+        else:
+            m.load_state_dict(state_dict)
 
     # Optimizer
     optimizer = get_optimizer(p, model, p['update_cluster_head_only'])
@@ -146,7 +155,7 @@ def main():
     if os.path.exists(p['classification_checkpoint']):
         print(colored('-- Model initialised from last checkpoint: {}'.format(p['classification_checkpoint']), 'green'))
         checkpoint = torch.load(p['classification_checkpoint'], map_location='cpu')
-        model.load_state_dict(checkpoint['model'])
+        load_model_state_dict(model, checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         start_epoch = checkpoint['epoch']
         best_loss = checkpoint['best_loss']
@@ -190,14 +199,14 @@ def main():
         if rep_f1 > best_f1:
             best_f1 = rep_f1
             nomral_label = majority_label
-            torch.save({'model': model.module.state_dict(), 'head': best_loss_head, 'normal_label': normal_label}, p['classification_model'])
-            torch.save({'optimizer': optimizer.state_dict(), 'model': model.state_dict(),
+            torch.save({'model': get_state_dict(model), 'head': best_loss_head, 'normal_label': normal_label}, p['classification_model'])
+            torch.save({'optimizer': optimizer.state_dict(), 'model': get_state_dict(model),
                         'epoch': epoch + 1, 'best_loss': best_loss, 'best_loss_head': best_loss_head, 'normal_label': normal_label},
                        p['classification_checkpoint'])
 
     model_checkpoint = torch.load(p['classification_model'], map_location='cpu')
-    model.module.load_state_dict(model_checkpoint['model'])
-    torch.save({'optimizer': optimizer.state_dict(), 'model': model.state_dict(),
+    load_model_state_dict(model, model_checkpoint['model'])
+    torch.save({'optimizer': optimizer.state_dict(), 'model': get_state_dict(model),
                 'epoch': p['epochs'], 'best_loss': best_loss, 'best_loss_head': best_loss_head, 'normal_label': normal_label},
                p['classification_checkpoint'])
     normal_label = model_checkpoint['normal_label']
