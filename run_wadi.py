@@ -3,6 +3,7 @@ import sys
 import time
 import json
 import shutil
+import random
 import subprocess
 import torch
 import numpy as np
@@ -16,6 +17,20 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 # =========================================================
 KAGGLE_TRAIN_PATH = "/kaggle/input/datasets/giovannimonco/wadi-data/WADI_14days_new.csv"
 KAGGLE_TEST_PATH  = "/kaggle/input/datasets/giovannimonco/wadi-data/WADI_attackdataLABLE.csv"
+
+# =========================================================
+# SEED SETTING
+# =========================================================
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ["PYTHONHASHSEED"] = str(seed)
 
 # =========================================================
 # PAPER-STYLE SUMMARY
@@ -49,9 +64,10 @@ def add_summary_statistics(res_df):
 # =========================================================
 # RUN EXPERIMENTS
 # =========================================================
-def run_experiments(base_dir, datasets, python_exec):
+def run_experiments(base_dir, datasets, python_exec, seed=42):
+    set_seed(seed)
     print("\n" + "="*30)
-    print("STARTING EXPERIMENTS")
+    print(f"STARTING EXPERIMENTS WADI (SEED {seed})")
     print("="*30)
 
     execution_times = []
@@ -65,16 +81,14 @@ def run_experiments(base_dir, datasets, python_exec):
         print("No GPU available, memory tracking disabled")
 
     for fname in datasets:
-        print(f"\nRunning dataset: {fname}")
+        print(f"\nRunning dataset: {fname} (Seed {seed})")
         start = time.time()
 
         # -- Pretext --
         try:
             result_pretext = subprocess.run([
-                python_exec, "carla_pretext.py",
-                "--config_env", "configs/env.yml",
-                "--config_exp", "configs/pretext/carla_pretext_wadi.yml",
-                "--fname", fname
+                python_exec, "-c",
+                f"import sys, torch; sys.argv=['carla_pretext.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/pretext/carla_pretext_wadi.yml', '--fname', '{fname}']; import carla_pretext; carla_pretext.set_seed({seed}); carla_pretext.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
 
             for line in result_pretext.stdout.split('\n'):
@@ -89,10 +103,8 @@ def run_experiments(base_dir, datasets, python_exec):
         # -- Classification --
         try:
             result_classification = subprocess.run([
-                python_exec, "carla_classification.py",
-                "--config_env", "configs/env.yml",
-                "--config_exp", "configs/classification/carla_classification_wadi.yml",
-                "--fname", fname
+                python_exec, "-c",
+                f"import sys, torch; sys.argv=['carla_classification.py', '--config_env', 'configs/env.yml', '--config_exp', 'configs/classification/carla_classification_wadi.yml', '--fname', '{fname}']; import carla_classification; carla_classification.set_seed({seed}); carla_classification.main(); print(f'Max GPU Memory Used: {{torch.cuda.max_memory_allocated() / 1024 / 1024:.2f}} MB') if torch.cuda.is_available() else None"
             ], capture_output=True, text=True, check=True)
 
             for line in result_classification.stdout.split('\n'):
@@ -116,7 +128,7 @@ def run_experiments(base_dir, datasets, python_exec):
     avg_time   = total_time / len(execution_times) if execution_times else 0
 
     print("\n" + "="*30)
-    print("DONE ALL WADI DATASETS")
+    print(f"DONE ALL WADI DATASETS (SEED {seed})")
     print(f"Total time: {total_time:.2f} s")
     print(f"Avg / dataset: {avg_time:.2f} s")
     print("="*30)
@@ -125,20 +137,20 @@ def run_experiments(base_dir, datasets, python_exec):
     time_results = {
         "TOTAL_TIME":     total_time,
         "AVG_TIME":       avg_time,
-        "MAX_GPU_MEM_MB": max_gpu_mem_mb
+        "MAX_GPU_MEM_MB": max_gpu_mem_mb,
+        "SEED": seed
     }
-    with open("results/wadi/time_results.json", "w") as f:
+    with open(f"results/wadi/time_results_seed{seed}.json", "w") as f:
         json.dump(time_results, f, indent=2)
 
-    print(f"\nTime results saved to results/wadi/time_results.json")
     return time_results
 
 # =========================================================
 # EVALUATION (PAPER-STYLE)
 # =========================================================
-def evaluate_experiments(datasets):
+def evaluate_experiments(datasets, seed=42):
     print("\n" + "="*30)
-    print("STARTING EVALUATION (PAPER STYLE)")
+    print(f"STARTING EVALUATION (PAPER STYLE - SEED {seed})")
     print("="*30)
 
     res_df = pd.DataFrame(columns=[
@@ -192,11 +204,11 @@ def evaluate_experiments(datasets):
 
     summary = add_summary_statistics(res_df)
 
-    with open("results/wadi/evaluation_results.json", "w") as f:
+    with open(f"results/wadi/evaluation_results_seed{seed}.json", "w") as f:
         json.dump(summary, f, indent=2)
 
     print("\n" + "="*30)
-    print("FINAL RESULTS (PAPER STYLE)")
+    print(f"FINAL RESULTS (PAPER STYLE - SEED {seed})")
     print("="*30)
     for k, v in summary.items():
         print(f"{k}: {v:.4f}" if isinstance(v, float) else f"{k}: {v}")
@@ -206,11 +218,11 @@ def evaluate_experiments(datasets):
 # =========================================================
 # WRITE SUMMARY
 # =========================================================
-def write_summary(time_results, eval_results):
+def write_summary(time_results, eval_results, seed=42):
     out = "results/wadi/ketqua.txt"
 
     summary_lines = [
-        "================ SUMMARY ================",
+        f"================ SUMMARY (SEED {seed}) ================",
         f"Precision : {eval_results['PRECISION']:.4f}",
         f"Recall    : {eval_results['RECALL']:.4f}",
         f"F1-score  : {eval_results['F1']:.4f}",
@@ -226,8 +238,8 @@ def write_summary(time_results, eval_results):
     summary_text = "\n".join(summary_lines)
     print("\n" + summary_text)
 
-    with open(out, "w") as f:
-        f.write(summary_text + "\n")
+    with open(out, "a") as f:
+        f.write(summary_text + "\n\n")
 
     print(f"\nSummary written to {out}")
 
@@ -240,12 +252,10 @@ def main():
 
     datasets = ["wadi"]
 
-    writable_dataset_path = os.path.join(BASE_DIR, "datasets", "wadi")
+    writable_dataset_path = os.path.join(BASE_DIR, "datasets", "WADI")
     os.makedirs(writable_dataset_path, exist_ok=True)
 
-    # -------------------------------------------------------
     # Copy Kaggle files to writable path (Kaggle input is read-only)
-    # -------------------------------------------------------
     kaggle_train = KAGGLE_TRAIN_PATH
     kaggle_test  = KAGGLE_TEST_PATH
 
@@ -258,7 +268,7 @@ def main():
             print(f"Train file already exists: {dst_train}")
     else:
         print(f"[INFO] Kaggle train path not found: {kaggle_train}")
-        print("       Expecting datasets/wadi/WADI_14days_new.csv to exist locally.")
+        print("       Expecting datasets/WADI/WADI_14days_new.csv to exist locally.")
 
     if os.path.exists(kaggle_test):
         dst_test = os.path.join(writable_dataset_path, "WADI_attackdataLABLE.csv")
@@ -269,11 +279,9 @@ def main():
             print(f"Test file already exists: {dst_test}")
     else:
         print(f"[INFO] Kaggle test path not found: {kaggle_test}")
-        print("       Expecting datasets/wadi/WADI_attackdataLABLE.csv to exist locally.")
+        print("       Expecting datasets/WADI/WADI_attackdataLABLE.csv to exist locally.")
 
-    # -------------------------------------------------------
     # Verify files exist before running
-    # -------------------------------------------------------
     train_ok = os.path.exists(os.path.join(writable_dataset_path, "WADI_14days_new.csv"))
     test_ok  = os.path.exists(os.path.join(writable_dataset_path, "WADI_attackdataLABLE.csv"))
 
@@ -287,14 +295,22 @@ def main():
     os.environ['wadi_DATASET_PATH'] = writable_dataset_path
     print(f"Set wadi_DATASET_PATH to {writable_dataset_path}")
 
-    # -------------------------------------------------------
-    # Run
-    # -------------------------------------------------------
-    time_results = run_experiments(BASE_DIR, datasets, sys.executable)
-    eval_results = evaluate_experiments(datasets)
+    # Clear previous ketqua.txt file if it exists
+    out_txt = "results/wadi/ketqua.txt"
+    if os.path.exists(out_txt):
+        os.remove(out_txt)
 
-    if time_results and eval_results:
-        write_summary(time_results, eval_results)
+    seeds = [42, 100]
+    for seed in seeds:
+        print("\n" + "="*50)
+        print(f"seed {seed}:")
+        print("="*50)
+
+        time_results = run_experiments(BASE_DIR, datasets, sys.executable, seed=seed)
+        eval_results = evaluate_experiments(datasets, seed=seed)
+
+        if time_results and eval_results:
+            write_summary(time_results, eval_results, seed=seed)
 
 
 if __name__ == "__main__":
