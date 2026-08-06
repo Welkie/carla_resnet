@@ -75,7 +75,7 @@ class TSRepository(object):
 
         d = features.shape[1]
         index = faiss.IndexFlatL2(d)
-        index.add(features.cpu().numpy())
+        index.add(features.cpu().numpy())  # CUDA
 
         xq = np.random.random(d)
         _, ids = index.search(xq.reshape(1, -1).astype(np.float32), len(features))
@@ -105,10 +105,14 @@ class TSRepository(object):
             new_targets[:self.ptr].copy_(self.targets[:self.ptr])
             self.targets = new_targets
             self.n = new_n
+
+        # Move to device of repository (likely CPU)
+        self.features[self.ptr:self.ptr+b].copy_(features.detach().to(self.device))
         
-        self.features[self.ptr:self.ptr+b].copy_(features.detach())
-        if not torch.is_tensor(targets): targets = torch.from_numpy(targets)
-        self.targets[self.ptr:self.ptr+b].copy_(targets.detach())
+        if not torch.is_tensor(targets): 
+            targets = torch.from_numpy(targets)
+        
+        self.targets[self.ptr:self.ptr+b].copy_(targets.detach().to(self.device))
         self.ptr += b
 
     def to(self, device):
