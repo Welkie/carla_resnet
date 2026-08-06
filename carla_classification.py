@@ -202,6 +202,10 @@ def main():
                         'epoch': epoch + 1, 'best_loss': best_loss, 'best_loss_head': best_loss_head, 'normal_label': normal_label},
                        p['classification_checkpoint'])
 
+        del predictions, tst_dl
+        import gc
+        gc.collect()
+
 
     model_checkpoint = torch.load(p['classification_model'], map_location='cpu')
     model.module.load_state_dict(model_checkpoint['model'])
