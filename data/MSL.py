@@ -17,6 +17,11 @@ class MSL(Dataset):
     def __init__(self, fname, root=MyPath.db_root_dir('msl'), train=True, transform=None, sanomaly= None, mean_data=None, std_data=None, wsz=200):
 
         super(MSL, self).__init__()
+        if 'smap_DATASET_PATH' in os.environ and ('smap' in fname.lower() or 'smap' in root.lower()):
+            root = os.environ['smap_DATASET_PATH']
+        elif 'msl_DATASET_PATH' in os.environ and ('msl' in fname.lower() or 'msl' in root.lower()):
+            root = os.environ['msl_DATASET_PATH']
+
         self.root = root
         self.transform = transform
         self.sanomaly = sanomaly

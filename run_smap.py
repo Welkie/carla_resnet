@@ -283,6 +283,9 @@ def main():
     else:
         print("Kaggle input path not found. Using local path if available.")
 
+    os.environ['smap_DATASET_PATH'] = writable_dataset_path
+    print(f"Set smap_DATASET_PATH to {writable_dataset_path}")
+
     csv_path = "datasets/SMAP/labeled_anomalies.csv"
     data_info = pd.read_csv(csv_path)
     data_info = data_info[data_info["spacecraft"] == "SMAP"]
