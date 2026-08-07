@@ -78,6 +78,10 @@ def run_experiments(base_dir, data_info, python_exec, seed=4, wsz=300):
         print(f"\nRunning dataset: {fname} (Seed {seed}, WSZ {wsz})")
         start = time.time()
 
+        # Clean previous checkpoint & output directory to ensure 100% independence
+        shutil.rmtree(os.path.join("results", "MSL", fname), ignore_errors=True)
+        shutil.rmtree(os.path.join("results", "msl", fname), ignore_errors=True)
+
         # Run pretext
         try:
             result_pretext = subprocess.run([
@@ -157,8 +161,12 @@ def evaluate_experiments(data_info, seed=4, wsz=300):
     ])
 
     for fname in data_info["chan_id"]:
-        test_path = f"results/msl/{fname}/classification/classification_testprobs.csv"
-        train_path = f"results/msl/{fname}/classification/classification_trainprobs.csv"
+        test_path = f"results/MSL/{fname}/classification/classification_testprobs.csv"
+        train_path = f"results/MSL/{fname}/classification/classification_trainprobs.csv"
+
+        if not os.path.exists(test_path) or not os.path.exists(train_path):
+            test_path = f"results/msl/{fname}/classification/classification_testprobs.csv"
+            train_path = f"results/msl/{fname}/classification/classification_trainprobs.csv"
 
         if not os.path.exists(test_path) or not os.path.exists(train_path):
             print(f"Skip {fname} (missing files)")
