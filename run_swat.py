@@ -354,7 +354,7 @@ def main():
     if os.path.exists(out_txt):
         os.remove(out_txt)
 
-    seeds = [42, 100]
+    seeds = [42]
     for seed in seeds:
         print("\n" + "="*50)
         print(f"seed {seed}:")
