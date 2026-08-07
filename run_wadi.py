@@ -84,6 +84,12 @@ def run_experiments(base_dir, datasets, python_exec, seed=42, wsz=200):
         print(f"\nRunning dataset: {fname} (Seed {seed}, WSZ {wsz})")
         start = time.time()
 
+        # Clean previous checkpoint & output directory to ensure 100% independence
+        res_dir = os.path.join("results", "wadi", fname)
+        if os.path.exists(res_dir):
+            shutil.rmtree(res_dir, ignore_errors=True)
+            print(f"Cleaned previous output directory: {res_dir}")
+
         # -- Pretext --
         try:
             result_pretext = subprocess.run([
@@ -302,8 +308,8 @@ def main():
         os.remove(out_txt)
 
     runs = [
-        {"seed": 4, "wsz": 600},
-        {"seed": 4, "wsz": 800},
+        {"seed": 4, "wsz": 1200},
+        {"seed": 4, "wsz": 1600},
     ]
 
     for idx, run_cfg in enumerate(runs, 1):
