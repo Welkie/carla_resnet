@@ -300,7 +300,7 @@ def main():
         os.remove(out_txt)
 
     runs = [
-        {"seed": 4, "wsz": 1800},
+        {"seed": 4, "wsz": 2000},
     ]
 
     for idx, run_cfg in enumerate(runs, 1):
